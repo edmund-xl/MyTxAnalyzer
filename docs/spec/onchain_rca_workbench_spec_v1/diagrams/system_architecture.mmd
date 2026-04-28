@@ -1,0 +1,24 @@
+flowchart TD
+  U[Analyst / Reviewer] --> FE[Next.js Frontend]
+  FE --> API[FastAPI API Gateway]
+  API --> CS[Case Service]
+  CS --> PG[(PostgreSQL)]
+  CS --> TEMP[Temporal Workflow]
+  TEMP --> ENV[EnvironmentCheckWorker]
+  TEMP --> DISC[TxDiscoveryWorker]
+  TEMP --> TXA[TxAnalyzerWorker]
+  TEMP --> DEC[DecodeWorker]
+  TEMP --> ACL[ACLForensicsWorker]
+  TEMP --> SAFE[SafeForensicsWorker]
+  TEMP --> FUND[FundFlowWorker]
+  TEMP --> AGENT[RCAAgentWorker]
+  TEMP --> REP[ReportWorker]
+  TXA --> TXAN[TxAnalyzer CLI]
+  TXAN --> S3[(S3 / MinIO Artifacts)]
+  DEC --> S3
+  REP --> S3
+  ENV --> RPC[RPC / Explorer]
+  DISC --> RPC
+  ACL --> RPC
+  SAFE --> RPC
+  FUND --> RPC

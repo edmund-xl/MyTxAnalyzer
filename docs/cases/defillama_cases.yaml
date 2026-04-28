@@ -1,0 +1,96 @@
+snapshot_date: "2026-04-27"
+source: "https://defillama.com/hacks"
+cases:
+  - project: "Bunni V2"
+    date: "2025-09-02"
+    chain: "Ethereum/Unichain"
+    amount: "$8.4m"
+    classification: "Protocol Logic"
+    technique: "Liquidity Distribution Function precision / rounding exploit"
+    defillama_url: "https://defillama.com/protocol/bunni-v2?denomination=USD&dexVolume=true&events=false&tvl=false"
+    postmortem_urls:
+      - "https://blog.bunni.xyz/posts/exploit-post-mortem/"
+      - "https://blocksec.com/blog/bunni-incident-repeated-small-withdrawals-compound-a-rounding-error-into-an-8.4m-drain"
+      - "https://www.quillaudits.com/blog/hack-analysis/bunni-v2-exploit"
+    seed_txs:
+      eth:
+        - "0x1c27c4d625429acfc0f97e466eda725fd09ebdc77550e529ba4cbdbc33beb97b"
+      unichain:
+        - "0x4776f31156501dd456664cd3c91662ac8acc78358b9d4fd79337211eb6a1d451"
+    expected_attack_type: "custom liquidity accounting rounding exploit"
+
+  - project: "Cork Protocol"
+    date: "2025-05-28"
+    chain: "Ethereum"
+    amount: "~$12m / 3,761 wstETH"
+    classification: "Protocol Logic"
+    technique: "fake market setup plus hook/flash swap authorization bypass"
+    defillama_url: "https://defillama.com/hacks"
+    postmortem_urls:
+      - "https://www.cork.tech/blog/post-mortem"
+      - "https://www.certik.com/resources/blog/cork-protocol-incident-analysis"
+    seed_txs:
+      eth:
+        - "0xfd89cdd0be468a564dd525b222b728386d7c6780cf7b2f90d2b54493be09f64d"
+    expected_attack_type: "Cork Hook / market accounting authorization bypass"
+
+  - project: "KiloEx"
+    date: "2025-04-14"
+    chain: "BSC/Base/Taiko"
+    amount: "~$7.4m"
+    classification: "Access Control / Oracle"
+    technique: "forwarded-call validation and price/oracle manipulation across perpetual markets"
+    defillama_url: "https://defillama.com/hacks"
+    postmortem_urls:
+      - "https://chainvestigate.com/en/kiloex-hack-analysis"
+    seed_txs:
+      bsc:
+        - "0x38b25be14b83fd549d5e0b29ba962db83d41f5f9072d0eac4f692fa8e7110bc0"
+    expected_attack_type: "multi-chain perpetual market exploit"
+
+  - project: "GMX V1"
+    date: "2025-07-09"
+    chain: "Arbitrum"
+    amount: "~$42m"
+    classification: "Protocol Logic"
+    technique: "cross-contract reentrancy bypassing old guard and manipulating GLP price"
+    defillama_url: "https://defillama.com/hacks"
+    postmortem_urls:
+      - "https://blocksec.com/blog/gmx-incident-cross-contract-reentrancy-bypasses-a-four-year-old-guard"
+    seed_txs:
+      arbitrum:
+        - "0x1f00da742318ad1807b6ea8283bfe22b4a8ab0bc98fe428fbfe443746a4a7353"
+        - "0x03182d3f0956a91c4e4c8f225bbc7975f9434fab042228c7acdc5ec9a32626ef"
+    expected_attack_type: "cross-contract reentrancy / GLP price manipulation"
+
+  - project: "Balancer V2"
+    date: "2025-11-03"
+    chain: "Ethereum"
+    amount: "$117m-$125m"
+    classification: "Protocol Logic"
+    technique: "Composable Stable Pool scaling/rounding and vault withdrawal abuse"
+    defillama_url: "https://defillama.com/hacks"
+    postmortem_urls:
+      - "https://www.halborn.com/blog/post/explained-the-balancer-hack-november-2025"
+      - "https://redasgard.com/blog/balancer-v2-exploit-analysis-november-2025"
+      - "https://www.quillaudits.com/blog/hack-analysis/the-balancer-hack"
+    seed_txs:
+      eth:
+        - "0xd155207261712c35fa3d472ed1e51bfcd816e616dd4f517fa5959836f5b48569"
+    expected_attack_type: "stable-pool invariant manipulation / Balancer V2 vault exploit"
+
+  - project: "Scallop Lend"
+    date: "2026-04-26"
+    chain: "Sui"
+    amount: "~150,000 SUI"
+    classification: "Reward Accounting / Deprecated Contract"
+    technique: "deprecated sSUI spool rewards package allowed abnormal reward redemption from a fresh spool account"
+    defillama_url: "https://defillama.com/hacks"
+    postmortem_urls:
+      - "https://www.kucoin.com/news/flash/scallop-loses-150-000-sui-due-to-ssui-reward-pool-vulnerability"
+      - "https://blockonomi.com/scallop-defi-exploit-exposes-deprecated-contract-risk-amid-april-2026s-606m-loss-streak/"
+      - "https://tr.beincrypto.com/scallop-sui-defi-suclusu-150-bin/"
+    seed_txs:
+      sui:
+        - "6WNDjCX3W852hipq6yrHhpUaSFHSPWfTxuLKaQkgNfVL"
+    expected_attack_type: "Sui deprecated rewards contract / reward index baseline exploit"

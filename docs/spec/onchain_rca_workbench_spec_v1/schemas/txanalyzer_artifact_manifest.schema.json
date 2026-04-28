@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TxAnalyzerArtifactManifest",
+  "type": "object",
+  "required": ["producer", "tx_hash", "network_key", "object_prefix", "files"],
+  "properties": {
+    "producer": {"type": "string", "const": "txanalyzer_worker"},
+    "tx_hash": {"type": "string"},
+    "network_key": {"type": "string"},
+    "source_dir": {"type": "string"},
+    "object_prefix": {"type": "string"},
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "size_bytes", "artifact_type"],
+        "properties": {
+          "path": {"type": "string"},
+          "sha256": {"type": "string"},
+          "size_bytes": {"type": "integer"},
+          "artifact_type": {"type": "string"}
+        }
+      }
+    }
+  }
+}

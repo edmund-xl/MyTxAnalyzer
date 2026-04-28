@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RCAAgentOutput",
+  "type": "object",
+  "required": ["root_cause_one_liner", "attack_type", "severity", "confidence", "findings"],
+  "properties": {
+    "root_cause_one_liner": {"type": "string"},
+    "attack_type": {"type": "string"},
+    "severity": {"type": "string", "enum": ["critical", "high", "medium", "low", "info", "unknown"]},
+    "confidence": {"type": "string", "enum": ["high", "medium", "low", "partial"]},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title", "finding_type", "severity", "confidence", "claim", "rationale", "evidence_ids"],
+        "properties": {
+          "title": {"type": "string"},
+          "finding_type": {
+            "type": "string",
+            "enum": ["access_control", "multisig", "fund_flow", "contract_bug", "loss", "remediation", "data_quality", "root_cause", "entity_profile"]
+          },
+          "severity": {"type": "string", "enum": ["critical", "high", "medium", "low", "info", "unknown"]},
+          "confidence": {"type": "string", "enum": ["high", "medium", "low", "partial"]},
+          "claim": {"type": "string"},
+          "rationale": {"type": "string"},
+          "falsification": {"type": "string"},
+          "evidence_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+          "requires_reviewer": {"type": "boolean", "default": true}
+        }
+      }
+    },
+    "blockers": {"type": "array", "items": {"type": "string"}},
+    "open_questions": {"type": "array", "items": {"type": "string"}}
+  }
+}

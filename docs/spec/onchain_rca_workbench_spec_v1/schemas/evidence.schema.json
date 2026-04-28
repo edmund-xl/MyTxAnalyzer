@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Evidence",
+  "type": "object",
+  "required": ["case_id", "source_type", "producer", "claim_key", "decoded", "confidence"],
+  "properties": {
+    "id": {"type": "string"},
+    "case_id": {"type": "string"},
+    "tx_id": {"type": ["string", "null"]},
+    "source_type": {
+      "type": "string",
+      "enum": ["receipt_log", "trace_call", "source_line", "state_call", "signature", "balance_diff", "artifact_summary", "tx_metadata", "agent_inference"]
+    },
+    "producer": {"type": "string"},
+    "claim_key": {"type": "string"},
+    "raw_path": {"type": ["string", "null"]},
+    "decoded": {"type": "object"},
+    "confidence": {"type": "string", "enum": ["high", "medium", "low", "partial"]}
+  }
+}

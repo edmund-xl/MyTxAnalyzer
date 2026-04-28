@@ -1,0 +1,489 @@
+openapi: 3.1.0
+info:
+  title: On-chain RCA Workbench API
+  version: 1.0.0
+  description: API for post-incident on-chain attack analysis and report generation.
+servers:
+  - url: /api
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /networks:
+    get:
+      summary: List configured networks
+      responses:
+        '200':
+          description: Network list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Network'
+  /cases:
+    post:
+      summary: Create analysis case
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCaseRequest'
+      responses:
+        '201':
+          description: Created case
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Case'
+    get:
+      summary: List cases
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: network_key
+          in: query
+          schema: { type: string }
+        - name: severity
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Cases
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Case'
+  /cases/{case_id}:
+    get:
+      summary: Get case detail
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: Case detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseDetail'
+  /cases/{case_id}/run:
+    post:
+      summary: Start or rerun case workflow
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                depth:
+                  $ref: '#/components/schemas/AnalysisDepth'
+                force:
+                  type: boolean
+                  default: false
+      responses:
+        '202':
+          description: Workflow started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workflow_id: { type: string }
+                  status: { type: string }
+  /cases/{case_id}/transactions:
+    get:
+      summary: List transactions in case
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+    post:
+      summary: Manually add transaction to case
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tx_hash]
+              properties:
+                tx_hash: { type: string }
+                phase: { type: string }
+      responses:
+        '201':
+          description: Transaction added
+  /cases/{case_id}/timeline:
+    get:
+      summary: Get attack timeline
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: Timeline
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TimelineItem'
+  /cases/{case_id}/evidence:
+    get:
+      summary: List evidence
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - name: source_type
+          in: query
+          schema: { type: string }
+        - name: claim_key
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Evidence list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Evidence'
+  /evidence/{evidence_id}:
+    get:
+      summary: Get evidence detail
+      parameters:
+        - name: evidence_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Evidence detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+  /cases/{case_id}/findings:
+    get:
+      summary: List findings
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: Findings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Finding'
+  /findings/{finding_id}/review:
+    patch:
+      summary: Review finding
+      parameters:
+        - name: finding_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewFindingRequest'
+      responses:
+        '200':
+          description: Updated finding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
+  /cases/{case_id}/reports:
+    post:
+      summary: Generate report
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                language:
+                  type: string
+                  default: zh-CN
+                format:
+                  type: string
+                  enum: [markdown, json, pdf, html]
+                  default: markdown
+      responses:
+        '201':
+          description: Report generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+    get:
+      summary: List reports
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: Reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Report'
+  /cases/{case_id}/reports/{report_id}:
+    get:
+      summary: Get report
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+        - name: report_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+  /reports/{report_id}/publish:
+    post:
+      summary: Publish report after review
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Published report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+  /cases/{case_id}/jobs:
+    get:
+      summary: List job runs
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: Job runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JobRun'
+components:
+  parameters:
+    CaseId:
+      name: case_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    AnalysisDepth:
+      type: string
+      enum: [quick, full, full_replay]
+    SeedType:
+      type: string
+      enum: [transaction, address, contract, alert]
+    CaseStatus:
+      type: string
+      enum:
+        - CREATED
+        - ENV_CHECKING
+        - ENV_CHECKED
+        - DISCOVERING_TRANSACTIONS
+        - TRANSACTIONS_DISCOVERED
+        - PULLING_ARTIFACTS
+        - ARTIFACTS_PULLED
+        - DECODING
+        - DECODED
+        - BUILDING_EVIDENCE
+        - EVIDENCE_BUILT
+        - RUNNING_FORENSICS
+        - FORENSICS_DONE
+        - RUNNING_RCA_AGENT
+        - RCA_DONE
+        - DRAFTING_REPORT
+        - REPORT_DRAFTED
+        - UNDER_REVIEW
+        - PUBLISHED
+        - PARTIAL
+        - FAILED
+        - CANCELLED
+    Confidence:
+      type: string
+      enum: [high, medium, low, partial]
+    Severity:
+      type: string
+      enum: [critical, high, medium, low, info, unknown]
+    Network:
+      type: object
+      required: [key, name, chain_id, rpc_capabilities]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        chain_id: { type: integer }
+        explorer_type: { type: string }
+        rpc_capabilities:
+          type: object
+          properties:
+            trace_transaction: { type: boolean }
+            debug_trace_transaction: { type: boolean }
+            historical_eth_call: { type: boolean }
+    CreateCaseRequest:
+      type: object
+      required: [network_key, seed_type, seed_value]
+      properties:
+        title: { type: string }
+        network_key: { type: string }
+        seed_type: { $ref: '#/components/schemas/SeedType' }
+        seed_value: { type: string }
+        time_window_hours: { type: integer, default: 6 }
+        depth: { $ref: '#/components/schemas/AnalysisDepth' }
+        modules:
+          type: array
+          items: { type: string }
+        language: { type: string, default: zh-CN }
+    Case:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        network_key: { type: string }
+        seed_type: { $ref: '#/components/schemas/SeedType' }
+        seed_value: { type: string }
+        status: { $ref: '#/components/schemas/CaseStatus' }
+        severity: { $ref: '#/components/schemas/Severity' }
+        attack_type: { type: string }
+        loss_usd: { type: string, nullable: true }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CaseDetail:
+      allOf:
+        - $ref: '#/components/schemas/Case'
+        - type: object
+          properties:
+            module_status: { type: object }
+            data_quality: { type: object }
+            summary: { type: object }
+    Transaction:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tx_hash: { type: string }
+        block_number: { type: integer }
+        block_timestamp: { type: string, format: date-time }
+        from_address: { type: string }
+        to_address: { type: string, nullable: true }
+        nonce: { type: integer }
+        value_wei: { type: string }
+        status: { type: integer }
+        method_selector: { type: string }
+        method_name: { type: string }
+        phase: { type: string }
+        artifact_status: { type: string }
+    TimelineItem:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        phase: { type: string }
+        tx_hash: { type: string }
+        title: { type: string }
+        method_name: { type: string }
+        amount: { type: string }
+        evidence_ids:
+          type: array
+          items: { type: string }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+    Evidence:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        case_id: { type: string, format: uuid }
+        tx_id: { type: string, format: uuid, nullable: true }
+        source_type: { type: string }
+        producer: { type: string }
+        claim_key: { type: string }
+        raw_path: { type: string }
+        decoded: { type: object }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+        created_at: { type: string, format: date-time }
+    Finding:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        case_id: { type: string, format: uuid }
+        title: { type: string }
+        finding_type: { type: string }
+        severity: { $ref: '#/components/schemas/Severity' }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+        claim: { type: string }
+        rationale: { type: string }
+        falsification: { type: string }
+        evidence_ids:
+          type: array
+          items: { type: string }
+        reviewer_status: { type: string }
+        reviewer_comment: { type: string, nullable: true }
+    ReviewFindingRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [approved, rejected, more_evidence_needed]
+        comment: { type: string }
+    Report:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        case_id: { type: string, format: uuid }
+        version: { type: integer }
+        language: { type: string }
+        format: { type: string }
+        status: { type: string }
+        object_path: { type: string }
+        content_markdown: { type: string, nullable: true }
+        evidence_coverage: { type: object }
+        created_at: { type: string, format: date-time }
+    JobRun:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        case_id: { type: string, format: uuid }
+        job_name: { type: string }
+        status: { type: string }
+        input: { type: object }
+        output: { type: object }
+        error: { type: string, nullable: true }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true }

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportSection",
+  "type": "object",
+  "required": ["title", "body_markdown", "evidence_ids", "coverage", "status"],
+  "properties": {
+    "title": {"type": "string"},
+    "body_markdown": {"type": "string"},
+    "evidence_ids": {"type": "array", "items": {"type": "string"}},
+    "coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "status": {"type": "string", "enum": ["supported", "partial", "unsupported", "background"]}
+  }
+}

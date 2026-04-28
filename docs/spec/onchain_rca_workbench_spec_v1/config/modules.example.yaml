@@ -1,0 +1,39 @@
+modules:
+  environment_check:
+    enabled: true
+    priority: P0
+  tx_discovery:
+    enabled: true
+    priority: P0
+  txanalyzer:
+    enabled: true
+    priority: P0
+    txanalyzer_root: /opt/txanalyzer
+    timeout_seconds: 120
+  decode:
+    enabled: true
+    priority: P0
+  proxy_resolver:
+    enabled: true
+    priority: P0
+  acl_forensics:
+    enabled: true
+    priority: P0
+  safe_forensics:
+    enabled: true
+    priority: P0
+  fund_flow:
+    enabled: true
+    priority: P0
+  loss_calculator:
+    enabled: true
+    priority: P0
+  rca_agent:
+    enabled: true
+    priority: P0
+  report:
+    enabled: true
+    priority: P0
+  replay:
+    enabled: false
+    priority: P1

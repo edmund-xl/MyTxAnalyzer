@@ -1,0 +1,30 @@
+case:
+  title: MegaETH Aave V3 Attack Golden Case
+  network_key: megaeth
+  chain_id: 4326
+  seed_type: transaction
+  seed_value: "REPLACE_WITH_FULL_SAFE_AUTHORIZATION_TX_HASH"
+  time_window_hours: 8
+  depth: full
+  language: zh-CN
+known_addresses:
+  safe_acl_admin: "0x4c2444d88ad61b0842fba7ccdcb226260ebfa1bc"
+  attacker_eoa: "0xd8010aca201f6113160200b8a521f35be9f94c24"
+  owner_1: "0x7312f0b280f4bbaa47fc6485809f1c5cc629d7bb"
+  owner_2: "0x2bcef069eaea664397a28f99b0de5d4a4f78e23e"
+  owner_3: "0xb4837962855a1594e7ade6b87daa3e8f4a34baed"
+expected:
+  roles_granted_to_attacker:
+    - FLASH_BORROWER
+    - RISK_ADMIN
+    - BRIDGE
+    - ASSET_LISTING_ADMIN
+    - EMERGENCY_ADMIN
+  safe_threshold: 2
+  safe_owner_count: 3
+  attack_window: "2026-04-25 09:39:39 to 09:49:40 UTC+8"
+  loss:
+    eth: "~36.8 ETH"
+    usdt: "~238,658 USDT"
+notes:
+  - The sample report contains truncated tx hashes. Replace seed_value and expected tx list with full hashes before running automated golden-case tests.

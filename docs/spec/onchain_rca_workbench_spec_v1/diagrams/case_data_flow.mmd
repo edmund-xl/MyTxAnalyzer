@@ -1,0 +1,13 @@
+flowchart LR
+  Seed[Seed tx/address] --> Discovery[Tx Discovery]
+  Discovery --> TxSet[Related Tx Set]
+  TxSet --> TxAnalyzer[TxAnalyzer Artifact Pull]
+  TxAnalyzer --> Artifacts[Trace/Source/Opcode/Selectors]
+  Artifacts --> Decode[Deterministic Decode]
+  Decode --> Evidence[Structured Evidence]
+  Evidence --> Modules[ACL/Safe/FundFlow/Loss Modules]
+  Modules --> Findings[Findings]
+  Findings --> QA[QA Gates]
+  QA --> Report[Report Draft]
+  Report --> Review[Human Review]
+  Review --> Published[Published Report]

@@ -1,0 +1,83 @@
+networks:
+  eth:
+    name: Ethereum Mainnet
+    chain_id: 1
+    rpc_url_secret_ref: ETH_RPC_URL
+    explorer_type: etherscan_v2
+    explorer_base_url: https://api.etherscan.io/v2/api
+    explorer_api_key_secret_ref: ETHERSCAN_API_KEY
+    supports_trace_transaction: true
+    supports_debug_trace_transaction: false
+    supports_historical_eth_call: true
+  bsc:
+    name: BSC Mainnet
+    chain_id: 56
+    rpc_url_secret_ref: BSC_RPC_URL
+    explorer_type: etherscan_v2
+    explorer_base_url: https://api.etherscan.io/v2/api
+    explorer_api_key_secret_ref: BSCSCAN_API_KEY
+    supports_trace_transaction: false
+    supports_debug_trace_transaction: false
+    supports_historical_eth_call: true
+  arbitrum:
+    name: Arbitrum One
+    chain_id: 42161
+    rpc_url_secret_ref: ARBITRUM_RPC_URL
+    explorer_type: etherscan_v2
+    explorer_base_url: https://api.etherscan.io/v2/api
+    explorer_api_key_secret_ref: ARBISCAN_API_KEY
+    supports_trace_transaction: false
+    supports_debug_trace_transaction: false
+    supports_historical_eth_call: true
+  base:
+    name: Base Mainnet
+    chain_id: 8453
+    rpc_url_secret_ref: BASE_RPC_URL
+    explorer_type: etherscan_v2
+    explorer_base_url: https://api.etherscan.io/v2/api
+    explorer_api_key_secret_ref: BASESCAN_API_KEY
+    supports_trace_transaction: false
+    supports_debug_trace_transaction: false
+    supports_historical_eth_call: true
+  unichain:
+    name: Unichain Mainnet
+    chain_id: 130
+    rpc_url_secret_ref: UNICHAIN_RPC_URL
+    explorer_type: etherscan_v2
+    explorer_base_url: https://api.etherscan.io/v2/api
+    explorer_api_key_secret_ref: UNISCAN_API_KEY
+    supports_trace_transaction: false
+    supports_debug_trace_transaction: false
+    supports_historical_eth_call: true
+  taiko:
+    name: Taiko Mainnet
+    chain_id: 167000
+    rpc_url_secret_ref: TAIKO_RPC_URL
+    explorer_type: etherscan_v2
+    explorer_base_url: https://api.etherscan.io/v2/api
+    explorer_api_key_secret_ref: TAIKOSCAN_API_KEY
+    supports_trace_transaction: false
+    supports_debug_trace_transaction: false
+    supports_historical_eth_call: true
+  megaeth:
+    name: MegaETH Mainnet
+    network_type: evm
+    chain_id: 4326
+    rpc_url_secret_ref: MEGAETH_RPC_URL
+    explorer_type: etherscan_v2
+    explorer_base_url: https://api.etherscan.io/v2/api
+    explorer_api_key_secret_ref: MEGAETH_EXPLORER_API_KEY
+    supports_trace_transaction: false
+    supports_debug_trace_transaction: false
+    supports_historical_eth_call: true
+  sui:
+    name: Sui Mainnet
+    network_type: sui
+    chain_id: 0
+    rpc_url_secret_ref: SUI_RPC_URL
+    explorer_type: sui_explorer
+    explorer_base_url: https://suiexplorer.com
+    explorer_api_key_secret_ref:
+    supports_trace_transaction: false
+    supports_debug_trace_transaction: false
+    supports_historical_eth_call: false
