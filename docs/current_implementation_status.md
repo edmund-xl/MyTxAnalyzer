@@ -2,7 +2,7 @@
 
 ## 中文
 
-快照日期：2026-04-28
+快照日期：2026-04-29
 
 本文记录 RCA Workbench 当前本地实现状态。原始规格包保留在 `docs/spec/onchain_rca_workbench_spec_v1/`，作为实现基准。
 
@@ -83,8 +83,19 @@ PDF export 是 report 的派生 artifact：
 - GMX V1
 - Balancer V2
 - Scallop Lend
+- Revert Finance
 
 Scallop Lend 已走 Sui native 处理。EVM case 使用公共 RPC 做基础验证，并在可用时接入 TxAnalyzer。
+
+本轮新增 Revert Finance Base case：
+
+- Case ID: `72c5044b-d329-4467-80ae-6feb2890c9b3`
+- Seed tx: `0x10429eaeb479f9149854e4aeb978a35ac02d9688f6e22371712b3878c63a64ab`
+- 事件日期：2026-01-30
+- 主要结论：GaugeManager / V3Utils 管理路径允许带债抵押 LP NFT 被 unstake 或修改，缺少 active-debt solvency check。
+- 报告版本：v5，Markdown artifact 为 `.artifacts/cases/72c5044b-d329-4467-80ae-6feb2890c9b3/reports/report_v5.md`。
+- PDF export：`b1efb25d-e459-409f-85af-eae9fb84c677`，artifact 为 `.artifacts/cases/72c5044b-d329-4467-80ae-6feb2890c9b3/reports/report_v5.pdf`，Chromium 渲染成功。
+- 图例修订：当 case 已有 high/critical finding 时，`diagram_specs` 不再把通用 `data_quality` finding 放入攻击图或证据图。
 
 ### 验证命令
 
@@ -131,7 +142,7 @@ lsof -nP -iTCP:8100 -sTCP:LISTEN
 
 ## English
 
-Snapshot date: 2026-04-28
+Snapshot date: 2026-04-29
 
 This document records the current local implementation state of the RCA Workbench. The original source specification remains under `docs/spec/onchain_rca_workbench_spec_v1/` as the implementation baseline.
 
@@ -212,8 +223,19 @@ Included cases:
 - GMX V1
 - Balancer V2
 - Scallop Lend
+- Revert Finance
 
 Scallop Lend has Sui-native handling. EVM cases use public RPC for baseline verification and TxAnalyzer where available.
+
+New regression case added in this update:
+
+- Case ID: `72c5044b-d329-4467-80ae-6feb2890c9b3`
+- Seed tx: `0x10429eaeb479f9149854e4aeb978a35ac02d9688f6e22371712b3878c63a64ab`
+- Incident date: 2026-01-30
+- Main conclusion: the GaugeManager / V3Utils management path allowed a collateralized LP NFT with active debt to be unstaked or modified without an active-debt solvency check.
+- Report version: v5, with Markdown artifact at `.artifacts/cases/72c5044b-d329-4467-80ae-6feb2890c9b3/reports/report_v5.md`.
+- PDF export: `b1efb25d-e459-409f-85af-eae9fb84c677`, with artifact at `.artifacts/cases/72c5044b-d329-4467-80ae-6feb2890c9b3/reports/report_v5.pdf`; Chromium rendering succeeded.
+- Diagram update: when a case already has a high/critical finding, `diagram_specs` no longer places the generic `data_quality` finding into the attack-flow or evidence-map diagrams.
 
 ### Verification Commands
 

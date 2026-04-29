@@ -70,6 +70,8 @@ class RCAAgentWorker:
             return WorkerResult(case_id=case_id, worker_name=self.name, status="failed", summary={}, error=str(exc))
 
     def _root_cause(self, findings) -> str:
+        if any(f.finding_type == "revert_collateralized_position_solvency_check_missing" for f in findings):
+            return "Revert Finance evidence indicates a missing solvency constraint in the staking/management path allowed collateralized LP NFT liquidity to be withdrawn while debt remained outstanding."
         if any(f.finding_type == "scallop_deprecated_reward_contract" for f in findings):
             return "Scallop incident evidence points to a deprecated Sui rewards contract path that allowed abnormal sSUI spool reward redemption."
         if any(f.finding_type == "purrlend_unbacked_mint_control_failure" for f in findings):
@@ -83,6 +85,8 @@ class RCAAgentWorker:
         return "No high-confidence root cause has been established from available evidence."
 
     def _attack_type(self, findings) -> str | None:
+        if any(f.finding_type == "revert_collateralized_position_solvency_check_missing" for f in findings):
+            return "collateralized_lp_position_solvency_check_missing"
         if any(f.finding_type == "scallop_deprecated_reward_contract" for f in findings):
             return "deprecated_reward_contract_reward_accounting"
         if any(f.finding_type == "purrlend_unbacked_mint_control_failure" for f in findings):

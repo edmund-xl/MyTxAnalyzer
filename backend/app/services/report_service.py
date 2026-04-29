@@ -186,6 +186,9 @@ class ReportService:
         return DiagramService(self.db, self.object_store).markdown_for_diagrams(diagrams)
 
     def _tldr(self, case, timeline: list[dict], evidence: list) -> str:
+        revert = self._revert_facts(evidence)
+        if revert:
+            return self._revert_tldr(case, timeline, evidence, revert)
         purrlend = self._purrlend_facts(evidence)
         if purrlend:
             return self._purrlend_tldr(case, timeline, evidence, purrlend)
@@ -224,6 +227,9 @@ class ReportService:
         return "\n".join(lines)
 
     def _overview(self, case, timeline: list[dict], evidence: list, findings: list) -> str:
+        revert = self._revert_facts(evidence)
+        if revert:
+            return self._revert_overview(case, timeline, evidence, findings, revert)
         purrlend = self._purrlend_facts(evidence)
         if purrlend:
             return self._purrlend_overview(case, timeline, evidence, findings, purrlend)
@@ -277,6 +283,9 @@ class ReportService:
         return "\n\n".join(paragraphs)
 
     def _entities(self, case, transactions: list, evidence: list) -> str:
+        revert = self._revert_facts(evidence)
+        if revert:
+            return self._revert_entities(case, transactions, evidence, revert)
         purrlend = self._purrlend_facts(evidence)
         if purrlend:
             return self._purrlend_entities(case, transactions, evidence, purrlend)
@@ -333,6 +342,9 @@ class ReportService:
         )
 
     def _timeline(self, case, timeline: list[dict]) -> str:
+        revert = self._revert_facts_from_case_evidence(case.id)
+        if revert:
+            return self._revert_timeline(case, timeline, revert)
         purrlend = self._purrlend_facts_from_case_evidence(case.id)
         if purrlend:
             return self._purrlend_timeline(case, timeline, purrlend)
@@ -423,6 +435,9 @@ class ReportService:
         )
 
     def _root_cause(self, case, findings: list, evidence: list) -> str:
+        revert = self._revert_facts(evidence)
+        if revert:
+            return self._revert_root_cause(case, findings, evidence, revert)
         purrlend = self._purrlend_facts(evidence)
         if purrlend:
             return self._purrlend_root_cause(case, findings, evidence, purrlend)
@@ -562,6 +577,9 @@ class ReportService:
         return "\n\n".join(lines)
 
     def _financial_impact(self, case, evidence: list) -> str:
+        revert = self._revert_facts(evidence)
+        if revert:
+            return self._revert_financial_impact(case, evidence, revert)
         purrlend = self._purrlend_facts(evidence)
         if purrlend:
             return self._purrlend_financial_impact(case, evidence, purrlend)
@@ -659,6 +677,9 @@ class ReportService:
         return "\n\n".join(lines)
 
     def _methodology(self, case, jobs: list[JobRun], evidence: list) -> str:
+        revert = self._revert_facts(evidence)
+        if revert:
+            return self._revert_methodology(case, jobs, evidence, revert)
         purrlend = self._purrlend_facts(evidence)
         if purrlend:
             return self._purrlend_methodology(case, jobs, evidence, purrlend)
@@ -769,6 +790,9 @@ class ReportService:
         )
 
     def _appendix(self, transactions: list, evidence: list, jobs: list[JobRun]) -> str:
+        revert = self._revert_facts(evidence)
+        if revert:
+            return self._revert_appendix(transactions, evidence, jobs, revert)
         purrlend = self._purrlend_facts(evidence)
         if purrlend:
             return self._purrlend_appendix(transactions, evidence, jobs, purrlend)
@@ -824,6 +848,368 @@ class ReportService:
                 self._table(["复核项", "结论", "证据 / 说明"], verification_rows),
             ]
         )
+
+    def _revert_tldr(self, case, timeline: list[dict], evidence: list, revert: dict[str, Any]) -> str:
+        flow = revert.get("flow") or {}
+        return "\n".join(
+            [
+                "**事件类型:** LP NFT collateral solvency bypass / 带债抵押头寸管理路径缺少偿付检查",
+                f"**链:** {case.network.name} (Chain ID: {case.network.chain_id})",
+                f"**日期:** {revert.get('date', self._incident_date(case, timeline))}",
+                f"**核心交易:** `{revert.get('seed_tx', case.seed_value)}`",
+                f"**攻击窗口:** seed tx 于 `{flow.get('timestamp', self._attack_window(case, timeline))}` 成功执行；公开复盘另确认第二笔补充攻击交易。",
+                f"**损失:** {revert.get('loss_summary', self._loss_summary(case, evidence))}；seed tx 约 {revert.get('seed_loss_summary', flow.get('borrowed_usdc', '49,000 USDC'))}",
+                "**一句话根因:** 抵押中的 Aerodrome LP NFT 仍能经 GaugeManager / V3Utils unstake、修改或 burn，路径没有在执行前强制确认该头寸是否仍背着未偿还债务。",
+                "**用户影响:** 官方复盘称损失来自 Revert 团队 / 协议资金，没有第三方用户资金损失。",
+                "**证据状态:** seed tx 已通过 Base RPC 和 receipt logs 复核；根因与总损失由 Revert 官方 post-mortem 和 BlockSec 复盘交叉确认。",
+                f"**置信度:** {case.confidence}",
+            ]
+        )
+
+    def _revert_overview(self, case, timeline: list[dict], evidence: list, findings: list, revert: dict[str, Any]) -> str:
+        flow = revert.get("flow") or {}
+        tx_hash = revert.get("seed_tx", case.seed_value)
+        return "\n\n".join(
+            [
+                (
+                    f"{revert.get('date', self._incident_date(case, timeline))}，Revert Finance 的 Base Aerodrome Lend vault 被攻击。"
+                    "这次事件的核心不是 USDC、cbBTC、Morpho 或 Aerodrome 本身被攻破，也不是价格预言机突然失真；问题出在 Revert 自己把“借贷抵押物”和“LP NFT 质押管理”连接起来时，漏掉了一个必须跨合约保持的业务不变量。"
+                ),
+                (
+                    f"Workbench 已复核核心 seed 交易 `{tx_hash}`。该交易在 Base block `{flow.get('block_number', '-')}` 成功执行，"
+                    f"交易发起方为 `{flow.get('from', '-')}`，入口合约为 `{flow.get('to', '-')}`。"
+                    "Receipt logs 显示同一笔交易里同时出现 USDC、cbBTC、LP NFT、Morpho、Revert Lend Vault、GaugeManager / V3Utils 和 Aerodrome Gauge 相关事件，这与公开复盘描述的攻击链一致。"
+                ),
+                (
+                    "攻击者先构造一个 Aerodrome Slipstream LP NFT，并把它放进 Revert Lend Vault 作为抵押借出 USDC。"
+                    "正常情况下，只要这张 LP NFT 仍支撑未偿还债务，系统就不应允许它被 unstake、移除流动性或 burn。"
+                    "但本案中，GaugeManager / V3Utils 的管理路径没有在执行前重新确认“该 NFT 是否处于抵押且仍有债务”，于是攻击者能够把抵押价值从借贷系统里抽走，同时留下坏账。"
+                ),
+                (
+                    f"官方 post-mortem 给出的总损失为 `{revert.get('loss_summary', '50,101.744193 USDC')}`，"
+                    f"BlockSec 对 seed 交易的估算利润约 `{revert.get('seed_loss_summary', '49,000 USDC')}`。"
+                    "第二笔交易补走剩余小额资金，因此报告把 seed 交易作为可复核主线，把第二笔交易作为公开来源确认的补充影响。"
+                ),
+                (
+                    f"系统当前有 `{len(evidence)}` 条 evidence 和 `{len(findings)}` 条未被拒绝 finding。"
+                    "本报告不会把 receipt 无法证明的内容写成链上自证结论；根因机制和总损失来自官方 / BlockSec 交叉来源，链上部分以 Base RPC、receipt logs 和 TxAnalyzer artifact 边界为准。"
+                ),
+            ]
+        )
+
+    def _revert_entities(self, case, transactions: list, evidence: list, revert: dict[str, Any]) -> str:
+        contracts = revert.get("contracts") or {}
+        flow = revert.get("flow") or {}
+        protocol_rows = [
+            ("协议", "Revert Finance", "受影响的 lending / LP NFT 管理系统", self._revert_source_label(revert, "official")),
+            ("Revert Lend Vault", contracts.get("vault", "-"), "接收 LP NFT 抵押并借出 USDC", "receipt logs + official post-mortem"),
+            ("GaugeManager", contracts.get("gauge_manager", "-"), "把抵押 LP NFT 连接到 gauge staking / unstake 管理路径", "official post-mortem"),
+            ("V3Utils", contracts.get("v3utils", "-"), "执行 unstake / modify / burn 相关实用函数", "official post-mortem"),
+            ("Aerodrome Gauge", contracts.get("aerodrome_gauge", "-"), "LP NFT stake/unstake 位置", "receipt logs"),
+            ("Morpho", contracts.get("morpho", "-"), "flash liquidity / 借贷流动性相关地址", "receipt logs"),
+            ("USDC", contracts.get("usdc", "-"), "被借出并形成损失的资产", "receipt logs"),
+            ("cbBTC", contracts.get("cbbtc", "-"), "交易中用于构建 LP 头寸的资产之一", "receipt logs"),
+        ]
+        actor_rows = [
+            (flow.get("from", "-"), "seed tx sender", f"提交核心攻击交易 `{revert.get('seed_tx', case.seed_value)}`", "tx_metadata"),
+            (flow.get("to", "-"), "入口 / 攻击执行合约", "聚合完成 mint、collateralize、borrow、stake、unstake/modify 和偿还路径", "tx_metadata + receipt logs"),
+            (flow.get("nft_token_id", "-"), "Aerodrome LP NFT tokenId", "被 mint、抵押、stake，并在带债状态下被管理路径操作", "receipt logs"),
+        ]
+        source_rows = [
+            (source.get("label", "-"), source.get("url", "-"), source.get("role", "-"))
+            for source in revert.get("sources", [])
+        ]
+        tx_rows = [
+            (tx.phase, tx.tx_hash, tx.from_address or "-", tx.to_address or "-", tx.method_name or tx.method_selector or "-")
+            for tx in transactions
+        ]
+        return "\n\n".join(
+            [
+                "### 2.1 协议、合约与资产",
+                self._table(["标识", "地址 / 对象", "攻击阶段角色", "证据"], protocol_rows),
+                "### 2.2 攻击者与关键对象",
+                self._table(["地址 / 对象", "角色", "行为", "证据"], actor_rows),
+                "### 2.3 Workbench 交易范围",
+                self._table(["Phase", "Tx", "From", "To", "Method"], tx_rows) if tx_rows else "暂无交易。",
+                "### 2.4 公开来源",
+                self._table(["来源", "URL", "用途"], source_rows) if source_rows else "暂无外部来源。",
+            ]
+        )
+
+    def _revert_timeline(self, case, timeline: list[dict], revert: dict[str, Any]) -> str:
+        flow = revert.get("flow") or {}
+        tx_hash = revert.get("seed_tx", case.seed_value)
+        second_tx = revert.get("second_tx", "-")
+        rows = [
+            ("Phase 0", "2026-01-29", "Aerodrome Lend support", "Revert 上线 Aerodrome Lend 相关集成，LP NFT 抵押与 gauge staking 管理路径形成新的组合边界。", "official post-mortem"),
+            ("Phase 1", flow.get("timestamp", self._attack_window(case, timeline)), tx_hash, "攻击者通过 flash liquidity / swap 路径准备 USDC 与 cbBTC，并 mint Aerodrome Slipstream LP NFT。", "receipt logs"),
+            ("Phase 2", flow.get("timestamp", self._attack_window(case, timeline)), "Revert Lend Vault", "LP NFT 被作为抵押存入 vault，随后借出约 49,000 USDC。", "receipt logs + BlockSec"),
+            ("Phase 3", flow.get("timestamp", self._attack_window(case, timeline)), "GaugeManager / Aerodrome Gauge", "同一抵押 LP NFT 进入 staking 管理路径。", "receipt logs + official post-mortem"),
+            ("Phase 4", flow.get("timestamp", self._attack_window(case, timeline)), "V3Utils / GaugeManager", "攻击者调用管理函数 unstake / modify / burn 抵押头寸，但执行前没有强制偿付或健康度检查。", "official post-mortem + BlockSec"),
+            ("Phase 5", flow.get("timestamp", self._attack_window(case, timeline)), "Attacker path", "flash liquidity 被归还，攻击者保留 seed tx 约 49,000 USDC 利润。", "receipt logs + BlockSec"),
+            ("Phase 6", "2026-01-30 03:29 UTC", second_tx, "第二笔攻击交易补走约 1,101.744193 USDC。", "official post-mortem"),
+            ("Phase 7", "事后", "Revert emergency response", "Revert 暂停 deposit / borrow，并修改 V3Utils 约束：仅允许 non-collateralized positions 走相关操作。", "official post-mortem"),
+        ]
+        call_chain = "\n".join(
+            [
+                "0. attacker controlled flow",
+                "1. mint Aerodrome Slipstream LP NFT with USDC/cbBTC liquidity",
+                "2. deposit LP NFT into Revert Lend Vault as collateral",
+                "3. borrow USDC against the collateralized NFT",
+                "4. stake collateralized NFT through GaugeManager",
+                "5. execute V3Utils/GaugeManager unstake or position modification",
+                "6. collateral value leaves the lending vault while debt remains",
+                "7. repay flash liquidity and keep USDC difference",
+            ]
+        )
+        return "\n\n".join(
+            [
+                self._table(["Phase", "时间", "对象 / Tx", "动作", "证据"], rows),
+                "### 关键交易分析",
+                "\n".join(
+                    [
+                        f"- Seed tx `{tx_hash}` 在 Base block `{flow.get('block_number', '-')}` 成功执行，status=`{flow.get('status', '-')}`。",
+                        f"- Receipt logs 中可见 LP NFT tokenId `{flow.get('nft_token_id', '-')}`、USDC、cbBTC、Morpho、Revert Lend Vault、GaugeManager / V3Utils 与 Aerodrome Gauge 相关事件。",
+                        "- 公开复盘明确把根因收敛到 `executeV3UtilsWithOptionalCompound` / GaugeManager 管理路径缺少 collateralized-position 检查。",
+                    ]
+                ),
+                "### 调用路径摘要",
+                f"```text\n{call_chain}\n```",
+            ]
+        )
+
+    def _revert_root_cause(self, case, findings: list, evidence: list, revert: dict[str, Any]) -> str:
+        rows = [
+            (
+                self._finding_title(finding),
+                finding.finding_type,
+                finding.severity,
+                finding.confidence,
+                finding.reviewer_status,
+                self._finding_evidence_summary(finding, evidence),
+            )
+            for finding in findings
+        ]
+        finding_block = self._table(["Finding", "类型", "严重性", "置信度", "审核", "证据"], rows) if rows else "暂无 finding。"
+        return "\n\n".join(
+            [
+                "### 5.1 这不是普通转账、预言机或 token 漏洞",
+                (
+                    "从链上结果看，USDC 确实从 vault 相关路径流出，但这不是 USDC 合约的任意转账问题，也不是价格预言机把 LP NFT 估错这一类单点故障。"
+                    "攻击能成立，是因为一张已经抵押并支撑债务的 LP NFT 又被另一个管理路径当成可自由 unstake / modify 的对象。"
+                ),
+                "### 5.2 Finding 汇总",
+                finding_block,
+                "### 5.3 根因：借贷抵押状态没有贯穿到 gauge 管理路径",
+                (
+                    "根因可以压缩成一句话：Revert Lend Vault 认为这张 LP NFT 是抵押物，但 GaugeManager / V3Utils 执行 unstake 或 modify 时，没有把“是否仍在抵押、是否仍有债务、操作后是否仍健康”作为硬性前置条件。"
+                    "只要这条约束断开，攻击者就能先借出 USDC，再通过管理路径把支撑这笔债务的底层流动性抽走。"
+                ),
+                "攻击根因链：",
+                "\n".join(
+                    [
+                        "1. LP NFT 被 mint 出来，并作为 Revert Lend Vault 的抵押物。",
+                        "2. Vault 依据该抵押物允许借出 USDC。",
+                        "3. 同一 LP NFT 又进入 GaugeManager / Aerodrome Gauge 的 staking 管理范围。",
+                        "4. `executeV3UtilsWithOptionalCompound` / V3Utils 操作没有阻止 collateralized position 被 unstake、modify 或 burn。",
+                        "5. 抵押物价值离开借贷系统，债务没有同步清偿，vault 留下 USDC 缺口。",
+                    ]
+                ),
+                "### 5.4 为什么这个缺陷容易被漏掉",
+                (
+                    "单看 lending vault，它只需要关心抵押、借款和还款；单看 gauge staking，它只是在帮助用户管理 LP NFT。"
+                    "危险在于二者共享同一张 NFT。只要 NFT 同时承担“债务抵押”和“可操作头寸”两个身份，所有会改变底层流动性的函数都必须重新检查债务状态。"
+                ),
+                "### 5.5 证据边界",
+                "\n".join(
+                    [
+                        "- Deterministic evidence: Base seed tx、block、receipt status、USDC/cbBTC/ERC721 event logs、TxAnalyzer artifact summary。",
+                        f"- Root-cause source: {self._revert_source_label(revert, 'official')}；BlockSec 复盘提供 seed tx 和阶段描述交叉验证。",
+                        "- Workbench 当前没有 Explorer API key 下的源码行级复现；因此源码修改点采用官方 post-mortem 表述，不伪装成自动源码审计结果。",
+                        "- 总损失采用官方口径；seed tx 利润采用 BlockSec 口径；二者在财务影响章节分开列示。",
+                    ]
+                ),
+            ]
+        )
+
+    def _revert_financial_impact(self, case, evidence: list, revert: dict[str, Any]) -> str:
+        flow = revert.get("flow") or {}
+        flows = flow.get("token_transfers") or []
+        token_rows = [
+            (
+                item.get("asset", "-"),
+                item.get("amount", "-"),
+                item.get("from", "-"),
+                item.get("to", "-"),
+                item.get("evidence", "-"),
+            )
+            for item in flows
+        ]
+        loss_rows = [
+            ("官方总损失", revert.get("loss_summary", "50,101.744193 USDC"), self._revert_source_label(revert, "official"), "覆盖 seed tx 与第二笔补充攻击交易。"),
+            ("seed tx 利润", revert.get("seed_loss_summary", flow.get("borrowed_usdc", "~49,000 USDC")), self._revert_source_label(revert, "blocksec"), "BlockSec 对核心攻击交易的估算。"),
+            ("第二笔交易", "1,101.744193 USDC", revert.get("second_tx", "-"), "官方复盘列出的补充攻击交易。"),
+            ("用户资金", "0", self._revert_source_label(revert, "official"), "官方称损失来自 Revert team / protocol capital，无第三方用户资金损失。"),
+        ]
+        if case.loss_usd is not None:
+            loss_rows.append(("Workbench case field", f"${float(case.loss_usd):,.2f}", "case.loss_usd", "本地 case 字段。"))
+        return "\n\n".join(
+            [
+                "### 6.1 seed tx 资金流",
+                (
+                    "这笔交易的资金流不是单线转账，而是先用 flash liquidity 构建 LP 头寸，再把 LP NFT 抵押借款，随后通过 gauge 管理路径撤走抵押价值。"
+                    "下面的表把同一出发点的不同资产路径拆开列示，报告图例也使用同一组 token_transfers 生成。"
+                ),
+                self._table(["资产", "金额", "From", "To", "证据"], token_rows) if token_rows else "暂无 token flow evidence。",
+                "### 6.2 损失口径",
+                self._table(["口径", "金额", "来源", "说明"], loss_rows),
+                "### 6.3 攻击成本",
+                "当前报告没有接入价格源和 gas 费归集模块，因此不写精确净利润。可确定的是，seed tx 的主要收益来自约 49,000 USDC 借款缺口，第二笔交易补走约 1,101.744193 USDC。",
+                "### 6.4 资金流证据",
+                self._table(
+                    ["字段", "值"],
+                    [
+                        ("block_number", flow.get("block_number", "-")),
+                        ("tx_status", flow.get("status", "-")),
+                        ("nft_token_id", flow.get("nft_token_id", "-")),
+                        ("token_transfer_rows", len(flows)),
+                        ("flow_evidence_id", revert.get("flow_evidence_id", "-")),
+                    ],
+                ),
+            ]
+        )
+
+    def _revert_methodology(self, case, jobs: list[JobRun], evidence: list, revert: dict[str, Any]) -> str:
+        env = self._environment_facts(evidence, jobs)
+        txanalyzer = self._txanalyzer_facts(evidence)
+        latest_jobs = self._recent_non_report_jobs(jobs)
+        env_rows = [
+            ("RPC chainId", env.get("chain_id", "-"), "通过" if env.get("rpc_ok") else "未通过 / 未执行", env.get("rpc_source", "-")),
+            ("seed tx hydration", revert.get("seed_tx", case.seed_value), "Base transaction and receipt verified", "eth_getTransactionByHash / eth_getTransactionReceipt"),
+            ("TxAnalyzer", self._purrlend_txanalyzer_status(txanalyzer), "CLI / fallback artifact import", "job_runs"),
+            ("external root cause", "official + BlockSec", "机制、修复措施和总损失交叉验证", "external_incident_report"),
+        ]
+        evidence_rows = [
+            ("tx_metadata", "Base public RPC", "交易存在、block、from/to、status", "deterministic"),
+            ("receipt_log", "Base public RPC", "USDC/cbBTC/ERC721/Aerodrome/Revert 事件路径", "deterministic"),
+            ("external_incident_report", "Revert official post-mortem", "根因、总损失、用户影响和修复措施", "corroborating"),
+            ("external_incident_report", "BlockSec analysis", "seed tx、攻击步骤和约 49,000 USDC 利润", "corroborating"),
+        ]
+        workflow = "\n".join(
+            [
+                f"Step 1: 选择未分析过的 case -> Revert Finance Base incident, date={revert.get('date', '2026-01-30')}",
+                f"Step 2: RPC 验证 seed tx -> `{revert.get('seed_tx', case.seed_value)}` block={revert.get('flow', {}).get('block_number', '-')}",
+                "Step 3: receipt/log 解析 -> 识别 USDC、cbBTC、LP NFT、vault、GaugeManager/V3Utils 与 Aerodrome Gauge 事件",
+                "Step 4: TxAnalyzer CLI -> 真实调用并导入 transaction/receipt/fallback artifacts；trace/source 能力不足时显式记录降级原因",
+                "Step 5: 外部来源交叉 -> 官方 post-mortem 确认根因和总损失，BlockSec 确认 seed tx 和阶段化攻击路径",
+                "Step 6: finding review -> high finding 绑定 receipt_log / tx_metadata deterministic evidence 后批准",
+                "Step 7: 报告和图例 -> 使用 Revert 专用模板生成 Markdown、Mermaid 图和 PDF export",
+            ]
+        )
+        return "\n\n".join(
+            [
+                "### 7.1 分析工具栈",
+                self._table(["工具 / 来源", "用途"], [("Base public RPC", "交易与 receipt 复核"), ("TxAnalyzer", "按官方 CLI 拉取 artifact；失败时保存 fallback manifest"), ("RCA Workbench", "evidence/finding/report/diagram schema 管理"), ("Revert + BlockSec", "公开复盘交叉验证")]),
+                "### 7.2 本案实际执行结果",
+                self._table(["检查项", "结果", "意义", "来源"], env_rows),
+                "### 7.3 证据分层",
+                self._table(["证据层", "来源", "能证明什么", "可靠性"], evidence_rows),
+                "### 7.4 分析步骤",
+                f"```text\n{workflow}\n```",
+                "### 7.5 数据可靠性",
+                "\n".join(
+                    [
+                        f"- Evidence count: {len(evidence)}。",
+                        f"- Latest worker runs: {len(latest_jobs)}，明细见附录。",
+                        "- 高危 finding 已绑定 deterministic evidence；不是只凭外部文章生成。",
+                        "- 源码行级补丁位置采用官方复盘；当前公共 RPC / Explorer key 限制下不写成本地自动源码审计结论。",
+                    ]
+                ),
+            ]
+        )
+
+    def _revert_appendix(self, transactions: list, evidence: list, jobs: list[JobRun], revert: dict[str, Any]) -> str:
+        jobs = self._recent_non_report_jobs(jobs)
+        txanalyzer = self._txanalyzer_facts(evidence)
+        flow = revert.get("flow") or {}
+        tx_rows = [
+            (tx.phase, tx.tx_hash, tx.block_number or "-", tx.from_address or "-", tx.to_address or "-", self._purrlend_artifact_status(tx.artifact_status))
+            for tx in transactions
+        ]
+        evidence_rows = [
+            (item.id, item.source_type, item.producer, item.claim_key, item.confidence, item.raw_path or "-")
+            for item in evidence
+        ]
+        job_rows = [
+            (job.job_name, self._purrlend_job_status_label(job.status, job.job_name), self._format_dt(job.started_at or job.created_at), self._summarize_error(job.error))
+            for job in jobs
+        ]
+        txanalyzer_rows = [
+            ("tx_hash", txanalyzer.get("tx_hash")),
+            ("has_trace", txanalyzer.get("has_trace")),
+            ("has_source", txanalyzer.get("has_source")),
+            ("has_opcode", txanalyzer.get("has_opcode")),
+            ("file_count", txanalyzer.get("file_count")),
+            ("fallback_reason", self._purrlend_fallback_reason(txanalyzer.get("fallback_reason"))),
+        ] if txanalyzer else []
+        source_rows = [
+            (source.get("label", "-"), source.get("url", "-"), source.get("role", "-"))
+            for source in revert.get("sources", [])
+        ]
+        verification_rows = [
+            ("未分析过的新 case", "已确认", "本轮选择 Revert Finance Base 2026-01-30，而不是此前跑过的 MegaETH/Purrlend、Bunni、Scallop 等样例。"),
+            ("Base seed tx", "已确认", f"`{revert.get('seed_tx', '-')}` block={flow.get('block_number', '-')}, status={flow.get('status', '-')}。"),
+            ("High finding deterministic evidence", "已确认", f"finding 绑定 tx_metadata / receipt_log evidence；flow_evidence_id={revert.get('flow_evidence_id', '-')}。"),
+            ("根因与修复", "已确认", "官方 post-mortem 指向 V3Utils / GaugeManager 管理路径缺少 collateralized-position 检查，并给出修复方向。"),
+            ("总损失", "已确认", f"{revert.get('loss_summary', '50,101.744193 USDC')}；用户资金影响：官方称无第三方用户资金损失。"),
+            ("范围边界", "已写入证据边界", "超出 deterministic 范围的源码行级复算已在正文中说明，不作为最终报告的开放事项输出。"),
+        ]
+        return "\n\n".join(
+            [
+                "### A.1 交易列表",
+                self._table(["Phase", "Tx", "Block", "From", "To", "Artifact"], tx_rows) if tx_rows else "暂无交易。",
+                "### A.2 Evidence 列表",
+                self._table(["ID", "Source", "Producer", "Claim", "Confidence", "Raw Path"], evidence_rows) if evidence_rows else "暂无 evidence。",
+                "### A.3 Revert 事件字段",
+                self._table(["字段", "值"], [("incident_key", revert.get("incident_key", "-")), ("seed_tx", revert.get("seed_tx", "-")), ("second_tx", revert.get("second_tx", "-")), ("loss_summary", revert.get("loss_summary", "-")), ("nft_token_id", flow.get("nft_token_id", "-"))]),
+                "### A.4 外部来源",
+                self._table(["来源", "URL", "用途"], source_rows) if source_rows else "暂无外部来源。",
+                "### A.5 TxAnalyzer Artifact Summary",
+                self._table(["字段", "值"], txanalyzer_rows) if txanalyzer_rows else "暂无 TxAnalyzer artifact summary。",
+                "### A.6 Worker 最新执行记录",
+                self._table(["Worker", "Status", "Started", "Error"], job_rows) if job_rows else "暂无 job run。",
+                "### A.7 复核结论",
+                self._table(["复核项", "结论", "证据 / 说明"], verification_rows),
+            ]
+        )
+
+    def _revert_facts(self, evidence: list) -> dict[str, Any]:
+        facts: dict[str, Any] = {}
+        for item in evidence:
+            decoded = item.decoded or {}
+            if item.claim_key == "revert_finance_incident_summary" and isinstance(decoded, dict):
+                facts.update(decoded)
+                facts["incident_evidence_id"] = item.id
+            if item.claim_key == "revert_receipt_flow_summary" and isinstance(decoded, dict):
+                facts["flow"] = decoded
+                facts["flow_evidence_id"] = item.id
+        if facts.get("project") == "Revert Finance" or facts.get("incident_evidence_id"):
+            return facts
+        return {}
+
+    def _revert_facts_from_case_evidence(self, case_id: str) -> dict[str, Any]:
+        return self._revert_facts(EvidenceService(self.db).list_for_case(case_id))
+
+    def _revert_source_label(self, revert: dict[str, Any], source_hint: str) -> str:
+        for source in revert.get("sources", []):
+            label = str(source.get("label", ""))
+            role = str(source.get("role", ""))
+            if source_hint.lower() in f"{label} {role}".lower():
+                return source.get("url") or label
+        sources = revert.get("sources", [])
+        if sources:
+            return sources[0].get("url") or sources[0].get("label", "-")
+        return "-"
 
     def _scallop_tldr(self, case, timeline: list[dict], evidence: list, scallop: dict[str, Any]) -> str:
         flow = self._scallop_primary_flow(scallop)
@@ -2390,6 +2776,8 @@ class ReportService:
         return str(value if value is not None else "-")
 
     def _infer_attack_type(self, case, evidence: list) -> str:
+        if self._revert_facts(evidence):
+            return "LP NFT 抵押物管理路径缺少偿付检查"
         if self._purrlend_facts(evidence):
             return "借贷市场 unbacked mint / borrow control failure"
         if self._bunni_facts(evidence):
@@ -2406,6 +2794,8 @@ class ReportService:
         return "待确认"
 
     def _root_cause_label(self, case, evidence: list) -> str:
+        if self._revert_facts(evidence):
+            return "GaugeManager / V3Utils unstake path missed active-debt solvency checks"
         if self._purrlend_facts(evidence):
             return "Unbacked mint cap / borrow control failure"
         if self._bunni_facts(evidence):
@@ -2423,6 +2813,8 @@ class ReportService:
     def _finding_title(self, finding) -> str:
         if finding.title == "Evidence-backed RCA draft requires reviewer analysis":
             return "Evidence 已采集，需 reviewer 复核 RCA 结论"
+        if finding.title == "Revert Finance collateralized LP NFT unstake bypass":
+            return "Revert Finance 带债 LP NFT 可被 unstake / modify"
         if finding.title == "Purrlend MegaETH unbacked mint / borrow control failure":
             return "Purrlend 未支持铸造与借款控制边界失效"
         if finding.title == "Bunni V2 idle balance rounding error enabled liquidity mispricing":

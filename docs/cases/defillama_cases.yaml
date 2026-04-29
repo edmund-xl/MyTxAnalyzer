@@ -1,4 +1,4 @@
-snapshot_date: "2026-04-27"
+snapshot_date: "2026-04-29"
 source: "https://defillama.com/hacks"
 cases:
   - project: "Bunni V2"
@@ -94,3 +94,19 @@ cases:
       sui:
         - "6WNDjCX3W852hipq6yrHhpUaSFHSPWfTxuLKaQkgNfVL"
     expected_attack_type: "Sui deprecated rewards contract / reward index baseline exploit"
+
+  - project: "Revert Finance"
+    date: "2026-01-30"
+    chain: "Base"
+    amount: "50,101.744193 USDC"
+    classification: "Business Logic / Collateral Solvency"
+    technique: "collateralized Aerodrome LP NFT unstake/modify path missing active-debt solvency check"
+    defillama_url: "https://defillama.com/hacks"
+    postmortem_urls:
+      - "https://paragraph.com/%40revertfinance/post%E2%80%91mortem-aerodrome-lend-vault-incident-on-base?referrer=0x8cadb20A4811f363Dadb863A190708bEd26245F8"
+      - "https://blocksec.com/blog/weekly-web3-security-incident-roundup-jan-25-feb-1-2026"
+    seed_txs:
+      base:
+        - "0x10429eaeb479f9149854e4aeb978a35ac02d9688f6e22371712b3878c63a64ab"
+        - "0x7fc27bf3d4be63cda4d7c0ac30f02e83b2581b532d43a9ccc026c7071c313777"
+    expected_attack_type: "collateralized LP NFT solvency check bypass"

@@ -33,6 +33,13 @@ class DiagramService:
         transactions = case_service.list_transactions(case_id)
         evidence = EvidenceService(self.db).list_for_case(case_id)
         findings = [item for item in FindingService(self.db).list_for_case(case_id) if item.reviewer_status != "rejected"]
+        if any(item.severity in {"critical", "high"} for item in findings):
+            findings = [
+                item
+                for item in findings
+                if not (item.finding_type == "data_quality" and item.severity in {"info", "low"})
+            ]
+        findings = sorted(findings, key=self._finding_rank)
         specs = [
             self._attack_flow(case_id, transactions, evidence, findings),
             self._fund_flow(case_id, transactions, evidence),
@@ -269,8 +276,18 @@ class DiagramService:
     def _edge_label(self, evidence: list) -> str:
         if not evidence:
             return ""
-        first = evidence[0]
+        confidence_order = {"high": 3, "medium": 2, "low": 1, "partial": 0}
+        first = max(evidence, key=lambda item: confidence_order.get(str(item.confidence), -1))
         return f"{first.source_type}:{first.confidence} ({len(evidence)} evidence)"
+
+    def _finding_rank(self, finding) -> tuple[int, int, str]:
+        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4, "unknown": 5}
+        review_order = {"approved": 0, "pending": 1, "more_evidence_needed": 2, "rejected": 3}
+        return (
+            severity_order.get(str(finding.severity), 9),
+            review_order.get(str(finding.reviewer_status), 9),
+            str(finding.created_at),
+        )
 
     def _flow_node_id(self, value: Any, address_nodes: dict[str, str]) -> str:
         key = str(value or "-").lower()
