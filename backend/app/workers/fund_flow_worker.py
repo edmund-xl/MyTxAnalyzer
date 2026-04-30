@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.models.db import utcnow
 from app.models.schemas import FindingCreate, WorkerResult
 from app.services.case_service import CaseService
 from app.services.evidence_service import EvidenceService
@@ -80,23 +81,33 @@ class FundFlowWorker:
                 evidence_ids.append(flow_evidence.id)
             if evidence_ids:
                 existing = next((item for item in FindingService(self.db).list_for_case(case_id) if item.finding_type == "fund_flow"), None)
+                finding_payload = FindingCreate(
+                    title="Asset movement evidence observed",
+                    finding_type="fund_flow",
+                    severity="info",
+                    confidence="high",
+                    claim=f"Detected {len(edges) or len(evidence_ids)} native/token transfer evidence item(s).",
+                    rationale="Transfer logs and native value movement are deterministic fund-flow evidence, but they do not prove an exploit, root cause, or loss by themselves.",
+                    falsification="Correlate the transfer with exploit-specific receipt logs, permission changes, source code, trace, price impact, or external incident evidence before treating it as a security finding.",
+                    evidence_ids=evidence_ids,
+                    requires_reviewer=True,
+                    created_by=self.name,
+                )
                 if existing is None:
-                    finding = FindingService(self.db).create_finding(
-                        case_id,
-                        FindingCreate(
-                            title="Asset movement evidence detected",
-                            finding_type="fund_flow",
-                            severity="high",
-                            confidence="high",
-                            claim=f"Detected {len(edges) or len(evidence_ids)} native/token transfer evidence item(s).",
-                            rationale="Transfer logs and native value movement are deterministic fund-flow evidence.",
-                            falsification="USD valuation and cross-chain destination confirmation remain separate checks.",
-                            evidence_ids=evidence_ids,
-                            created_by=self.name,
-                        ),
-                    )
+                    finding = FindingService(self.db).create_finding(case_id, finding_payload)
                     finding_ids.append(finding.id)
                 else:
+                    existing.title = finding_payload.title
+                    existing.severity = finding_payload.severity
+                    existing.confidence = finding_payload.confidence
+                    existing.claim = finding_payload.claim
+                    existing.rationale = finding_payload.rationale
+                    existing.falsification = finding_payload.falsification
+                    existing.evidence_ids = finding_payload.evidence_ids
+                    existing.requires_reviewer = True
+                    existing.updated_at = utcnow()
+                    self.db.add(existing)
+                    self.db.commit()
                     finding_ids.append(existing.id)
             output = {"fund_flow_evidence_count": len(evidence_ids), "fund_flow_edge_count": len(edges), "finding_ids": finding_ids}
             job_service.finish(job, "success" if evidence_ids else "partial", output=output)

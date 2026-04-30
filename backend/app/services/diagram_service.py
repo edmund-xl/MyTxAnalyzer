@@ -124,6 +124,7 @@ class DiagramService:
             }
         attack_steps = self._extract_attack_steps(evidence)
         evidence_label = self._edge_label(evidence[:4])
+        observation_only = bool(transactions) and not any(item.severity in {"medium", "high", "critical"} for item in findings)
         self._add_node(lines, nodes, "seed", "Seed / 入口")
         if attack_steps:
             previous = "seed"
@@ -132,7 +133,7 @@ class DiagramService:
                 self._add_node(lines, nodes, node, self._short(step.get("label") or step.get("id") or f"Step {index}", 48))
                 self._add_edge(lines, edges, previous, node, self._short(step.get("evidence") or step.get("tx_hash") or step.get("confidence") or "evidence", 52))
                 previous = node
-            if findings:
+            if findings and not observation_only:
                 self._add_node(lines, nodes, "root", self._short(findings[0].title, 40))
                 self._add_edge(lines, edges, previous, "root", findings[0].confidence)
         elif not transactions:
@@ -148,13 +149,13 @@ class DiagramService:
             self._add_edge(lines, edges, "seed" if index == 1 else f"tx{index - 1}", from_node, "next")
             self._add_edge(lines, edges, from_node, tx_node, tx.method_name or tx.method_selector or "call")
             self._add_edge(lines, edges, tx_node, to_node, evidence_label or tx.artifact_status)
-        if findings and not attack_steps:
+        if findings and not attack_steps and not observation_only:
             self._add_node(lines, nodes, "root", self._short(findings[0].title, 40))
             self._add_edge(lines, edges, f"tx{min(len(transactions), 10)}" if transactions else "evidence", "root", findings[0].confidence)
         confidence = self._diagram_confidence(evidence, transactions)
         return {
             "diagram_type": "attack_flow",
-            "title": "攻击流程图",
+            "title": "交易执行图" if observation_only else "攻击流程图",
             "mermaid_source": "\n".join(lines),
             "nodes_edges": {"nodes": nodes, "edges": edges},
             "evidence_ids": [item.id for item in evidence[:20]],
@@ -267,6 +268,7 @@ class DiagramService:
 
     def _extract_flows(self, evidence: list) -> list[dict[str, Any]]:
         flows: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str, str, str, str]] = set()
         for item in evidence:
             decoded = item.decoded or {}
             candidates = []
@@ -286,18 +288,28 @@ class DiagramService:
                 target = candidate.get("to") or candidate.get("to_address") or candidate.get("receiver")
                 if not source or not target:
                     continue
-                flows.append(
-                    {
-                        "from": source,
-                        "to": target,
-                        "asset": candidate.get("asset") or candidate.get("token") or candidate.get("symbol"),
-                        "amount": candidate.get("amount") or candidate.get("amount_decimal") or candidate.get("value"),
-                        "tx_hash": candidate.get("tx_hash") or decoded.get("tx_hash"),
-                        "log_index": candidate.get("log_index"),
-                        "confidence": candidate.get("confidence") or item.confidence,
-                        "evidence_id": candidate.get("evidence_id") or item.id,
-                    }
+                flow = {
+                    "from": source,
+                    "to": target,
+                    "asset": candidate.get("asset") or candidate.get("token") or candidate.get("symbol"),
+                    "amount": candidate.get("amount") or candidate.get("amount_decimal") or candidate.get("value"),
+                    "tx_hash": candidate.get("tx_hash") or decoded.get("tx_hash"),
+                    "log_index": candidate.get("log_index"),
+                    "confidence": candidate.get("confidence") or item.confidence,
+                    "evidence_id": candidate.get("evidence_id") or item.id,
+                }
+                key = (
+                    str(flow["from"]).lower(),
+                    str(flow["to"]).lower(),
+                    str(flow.get("asset") or "").lower(),
+                    str(flow.get("amount") or ""),
+                    str(flow.get("tx_hash") or "").lower(),
+                    str(flow.get("log_index") or ""),
                 )
+                if key in seen:
+                    continue
+                seen.add(key)
+                flows.append(flow)
         return flows
 
     def _is_address_scope_boundary(self, evidence: list) -> bool:

@@ -104,20 +104,44 @@ class TxDiscoveryWorker:
             return
         try:
             w3 = apply_network_middlewares(Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": 20})), case.network_key)
-            chain_tx = w3.eth.get_transaction(tx.tx_hash)
-            receipt = w3.eth.get_transaction_receipt(tx.tx_hash)
-            block = w3.eth.get_block(chain_tx["blockNumber"]) if chain_tx.get("blockNumber") is not None else None
+            transaction_source = "eth_getTransactionByHash"
+            chain_tx = None
+            receipt = None
+            block = None
+            try:
+                chain_tx = w3.eth.get_transaction(tx.tx_hash)
+            except Exception:
+                chain_tx = None
+            try:
+                receipt = w3.eth.get_transaction_receipt(tx.tx_hash)
+            except Exception:
+                receipt = None
+            if chain_tx is None and receipt and receipt.get("blockNumber") is not None:
+                block = w3.eth.get_block(receipt["blockNumber"], full_transactions=True)
+                chain_tx = self._find_transaction_in_block(block, tx.tx_hash)
+                transaction_source = "eth_getBlockByNumber_full_transactions"
+            if chain_tx is None:
+                return
+            block_number = chain_tx.get("blockNumber") if chain_tx.get("blockNumber") is not None else receipt.get("blockNumber") if receipt else None
+            if block is None and block_number is not None:
+                block = w3.eth.get_block(block_number)
             input_data = self._hex(chain_tx.get("input", "0x"))
-            tx.block_number = int(chain_tx["blockNumber"]) if chain_tx.get("blockNumber") is not None else None
-            tx.block_timestamp = datetime.fromtimestamp(block["timestamp"], timezone.utc) if block else None
-            tx.tx_index = int(chain_tx.get("transactionIndex", 0))
+            tx.block_number = self._int_value(block_number, None)
+            tx.block_timestamp = datetime.fromtimestamp(self._int_value(block.get("timestamp"), 0), timezone.utc) if block else None
+            tx.tx_index = self._int_value(chain_tx.get("transactionIndex") if chain_tx.get("transactionIndex") is not None else receipt.get("transactionIndex") if receipt else 0, 0)
             tx.from_address = str(chain_tx.get("from", "")).lower()
             tx.to_address = str(chain_tx.get("to", "")).lower() if chain_tx.get("to") else None
-            tx.nonce = int(chain_tx.get("nonce", 0))
-            tx.value_wei = int(chain_tx.get("value", 0))
-            tx.status = int(receipt.get("status", 0)) if receipt else None
+            tx.nonce = self._int_value(chain_tx.get("nonce"), 0)
+            tx.value_wei = self._int_value(chain_tx.get("value"), 0)
+            tx.status = self._int_value(receipt.get("status"), 0) if receipt else None
             tx.method_selector = input_data[:10] if input_data and len(input_data) >= 10 else None
-            tx.metadata_json = {"input": input_data, "log_count": len(receipt.get("logs", [])) if receipt else 0}
+            tx.metadata_json = {
+                "input": input_data,
+                "log_count": len(receipt.get("logs", [])) if receipt else 0,
+                "transaction_source": transaction_source,
+                "gas": self._int_value(chain_tx.get("gas"), None),
+                "gas_price": self._int_value(chain_tx.get("gasPrice"), None),
+            }
             self.db.add(tx)
             self.db.commit()
             self.db.refresh(tx)
@@ -152,6 +176,14 @@ class TxDiscoveryWorker:
                 )
         except Exception:
             return
+
+    def _find_transaction_in_block(self, block: Any, tx_hash: str) -> Any | None:
+        target = tx_hash.lower()
+        for block_tx in block.get("transactions", []) if block else []:
+            candidate_hash = self._hex(block_tx.get("hash", "")).lower()
+            if candidate_hash == target:
+                return block_tx
+        return None
 
     def _hydrate_sui_transaction(self, case, tx: Transaction) -> list[str]:
         rpc_url, _ = resolve_rpc_url(case.network)
@@ -396,9 +428,12 @@ class TxDiscoveryWorker:
             "timestamp": tx.block_timestamp.isoformat() if tx.block_timestamp else None,
             "from": tx.from_address,
             "to": tx.to_address,
+            "value_wei": str(tx.value_wei) if tx.value_wei is not None else None,
+            "status": tx.status,
             "method_selector": tx.method_selector,
             "phase": tx.phase,
             "artifact_status": tx.artifact_status,
+            "metadata": tx.metadata_json or {},
         }
 
     def _alert_summary(self, case) -> dict[str, Any]:
@@ -411,5 +446,15 @@ class TxDiscoveryWorker:
 
     def _hex(self, value: Any) -> str:
         if hasattr(value, "hex"):
-            return value.hex()
+            text = value.hex()
+            if not text:
+                return "0x"
+            return text if text.startswith("0x") else f"0x{text}"
         return str(value)
+
+    def _int_value(self, value: Any, default: int | None = 0) -> int | None:
+        if value is None or value == "":
+            return default
+        if isinstance(value, str) and value.startswith("0x"):
+            return int(value, 16)
+        return int(value)

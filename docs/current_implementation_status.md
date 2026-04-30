@@ -25,6 +25,8 @@ RCA Workbench 与 MegaETH Pentest Workbench 已明确隔离：
 - Provider 解析采用自带密钥优先、公共 RPC fallback：RPC / Explorer key 来源会进入 environment capability matrix。
 - EVM receipt parser 已标准化 Transfer、Approval、fund-flow edge 和 attack step；Sui 仍使用 Sui JSON-RPC 的 events/balanceChanges。
 - Case create 会校验 seed 类型和值的形状：EVM `address` seed 必须是 `0x` + 40 位十六进制字符；`0x` + 64 位交易哈希会被拒绝并提示改用 `transaction` seed。
+- 交易 seed 发现支持 MegaETH 这类 provider fallback：如果 `eth_getTransactionByHash` 返回空但 receipt 存在，系统会从 receipt 的 block number 拉取 full block 并按 hash 找回交易字段。
+- 普通 native value transfer 不再被提升为 high-severity 攻击 finding；如果没有 calldata、事件日志、合约/trace 异常或外部事件证据，报告会生成“链上交易预分析报告”。
 - Address seed 如果没有 Explorer txlist / seed transaction，会生成 evidence boundary 和“地址线索预分析报告”，不再套用攻击事件报告模板。
 - FundFlow worker 读取标准化 `fund_flow_edges`，资金流图按同源地址聚合并在边上标注 amount、asset、tx/evidence 和 confidence。
 - LossCalculator worker 已支持稳定币直接估值；缺少价格源时只写 evidence boundary，不伪造 USD 结论。
@@ -193,6 +195,8 @@ The RCA Workbench is separated from the MegaETH Pentest Workbench:
 - Provider resolution uses bring-your-own keys first and public RPC fallback. RPC / Explorer key sources are recorded in the environment capability matrix.
 - The EVM receipt parser normalizes Transfer, Approval, fund-flow edges, and attack steps. Sui continues to use Sui JSON-RPC events/balanceChanges.
 - Case creation validates seed type and value shape: EVM `address` seeds must be `0x` plus 40 hex characters; `0x` plus 64 hex transaction hashes are rejected with guidance to use a `transaction` seed.
+- Transaction seed discovery supports provider fallback for networks such as MegaETH: when `eth_getTransactionByHash` is empty but a receipt exists, the system fetches the full block from the receipt block number and recovers transaction fields by hash.
+- Plain native value transfers are no longer promoted to high-severity attack findings. Without calldata, event logs, contract/trace anomalies, or external incident evidence, the report is generated as an “on-chain transaction pre-analysis report”.
 - Address seeds without Explorer txlist or a seed transaction now produce an evidence boundary and an “address lead pre-analysis report” instead of using the attack incident report template.
 - The FundFlow worker consumes standardized `fund_flow_edges`; fund-flow diagrams aggregate by common source address and label each edge with amount, asset, tx/evidence, and confidence.
 - The LossCalculator worker supports direct stablecoin valuation. When a price source is missing, it records an evidence boundary instead of fabricating USD loss.

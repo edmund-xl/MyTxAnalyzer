@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import sys
 from pathlib import Path
 
 from app.core.public_rpc import resolve_explorer_api_key
 from app.models.db import Network
+from app.models.schemas import TransactionCreate
 from app.services.case_service import CaseService
 from app.services.evidence_parser_service import EvidenceParserService
 from app.services.evidence_service import EvidenceService
@@ -218,3 +220,120 @@ def test_address_seed_accepts_evm_address(client):
 
     assert response.status_code == 201, response.text
     assert response.json()["seed_type"] == "address"
+
+
+def test_transaction_seed_hydrates_from_full_block_fallback(client, db_session, monkeypatch):
+    tx_hash = "0x" + "b" * 64
+
+    class FakeEth:
+        def get_transaction(self, _tx_hash):
+            raise RuntimeError("eth_getTransactionByHash unavailable")
+
+        def get_transaction_receipt(self, _tx_hash):
+            return {
+                "transactionHash": tx_hash,
+                "status": "0x1",
+                "blockNumber": "0x8e6f12",
+                "transactionIndex": "0x3",
+                "gasUsed": "0xea60",
+                "logs": [],
+            }
+
+        def get_block(self, _block_number, full_transactions=False):
+            assert full_transactions is True
+            return {
+                "timestamp": "0x69a094e5",
+                "transactions": [
+                    {
+                        "hash": bytes.fromhex(tx_hash[2:]),
+                        "from": "0xb2b34b33f96952a0e17540250481f3b99fda854b",
+                        "to": "0xc37ae078cf9961ce22765e3de4a297a61ba1877f",
+                        "nonce": "0x8",
+                        "value": "0x2386f26fc10000",
+                        "input": "0x",
+                        "gas": "0x15f90",
+                        "gasPrice": "0x155cc0",
+                    }
+                ],
+            }
+
+    class FakeWeb3:
+        eth = FakeEth()
+
+    monkeypatch.setattr("app.workers.tx_discovery_worker.resolve_rpc_url", lambda network: ("http://rpc.local", "test"))
+    monkeypatch.setattr("app.workers.tx_discovery_worker.apply_network_middlewares", lambda _w3, _network_key: FakeWeb3())
+    case = client.post(
+        "/api/cases",
+        json={
+            "network_key": "megaeth",
+            "seed_type": "transaction",
+            "seed_value": tx_hash,
+            "depth": "full",
+        },
+    ).json()
+
+    result = TxDiscoveryWorker(db_session).run(case["id"])
+    rows = client.get(f"/api/cases/{case['id']}/transactions").json()
+
+    assert result.status == "success"
+    assert rows[0]["block_number"] == 9334546
+    assert rows[0]["from_address"] == "0xb2b34b33f96952a0e17540250481f3b99fda854b"
+    assert rows[0]["to_address"] == "0xc37ae078cf9961ce22765e3de4a297a61ba1877f"
+    assert rows[0]["metadata"]["transaction_source"] == "eth_getBlockByNumber_full_transactions"
+
+
+def test_simple_native_transfer_report_is_not_attack_template(client, db_session):
+    tx_hash = "0x" + "c" * 64
+    case = client.post(
+        "/api/cases",
+        json={
+            "network_key": "megaeth",
+            "seed_type": "transaction",
+            "seed_value": tx_hash,
+            "depth": "full",
+        },
+    ).json()
+    tx = CaseService(db_session).add_transaction(case["id"], TransactionCreate(tx_hash=tx_hash, phase="seed", metadata={"source": "test"}))
+    tx.block_number = 9334546
+    tx.block_timestamp = datetime(2026, 2, 26, 18, 45, 57, tzinfo=timezone.utc)
+    tx.tx_index = 3
+    tx.from_address = "0xb2b34b33f96952a0e17540250481f3b99fda854b"
+    tx.to_address = "0xc37ae078cf9961ce22765e3de4a297a61ba1877f"
+    tx.value_wei = 10_000_000_000_000_000
+    tx.status = 1
+    tx.metadata_json = {"input": "0x", "log_count": 0, "transaction_source": "test"}
+    db_session.add(tx)
+    db_session.commit()
+    EvidenceService(db_session).create_evidence(
+        case_id=case["id"],
+        tx_id=tx.id,
+        source_type="tx_metadata",
+        producer="test",
+        claim_key="transaction_in_case_scope",
+        raw_path=None,
+        decoded={
+            "tx_hash": tx_hash,
+            "block_number": tx.block_number,
+            "timestamp": tx.block_timestamp.isoformat(),
+            "from": tx.from_address,
+            "to": tx.to_address,
+            "value_wei": str(tx.value_wei),
+            "status": tx.status,
+            "metadata": tx.metadata_json,
+        },
+        confidence="high",
+    )
+
+    FundFlowWorker(db_session).run(case["id"])
+    RCAAgentWorker(db_session).run(case["id"])
+    updated = client.get(f"/api/cases/{case['id']}").json()
+    report = client.post(f"/api/cases/{case['id']}/reports", json={"format": "markdown"})
+    content = client.get(f"/api/cases/{case['id']}/reports/{report.json()['id']}").json()["content"]
+
+    assert updated["severity"] == "info"
+    assert updated["attack_type"] is None
+    assert "链上交易预分析报告" in content
+    assert "不是攻击 RCA" in content
+    assert "攻击者 / 接收地址" not in content
+    assert "攻击流程图" not in content
+    assert "铸造虚假抵押品" not in content

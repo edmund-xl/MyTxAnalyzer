@@ -208,7 +208,13 @@ class ReportService:
         title = case.title or "On-chain RCA"
         transactions = CaseService(self.db).list_transactions(case_id, limit=1)
         evidence = EvidenceService(self.db).list_for_case(case_id)
-        suffix = "地址线索预分析报告" if self._is_address_scope_boundary(case, transactions, evidence) else "攻击事件分析报告"
+        findings = FindingService(self.db).list_for_case(case_id)
+        if self._is_address_scope_boundary(case, transactions, evidence):
+            suffix = "地址线索预分析报告"
+        elif self._is_transaction_observation_report(case, evidence, findings):
+            suffix = "链上交易预分析报告"
+        else:
+            suffix = "攻击事件分析报告"
         lines = [f"# {title} {suffix}", ""]
         for section in sections:
             lines.extend([f"## {section['title']}", "", section["body_markdown"], ""])
@@ -221,6 +227,63 @@ class ReportService:
         if case.seed_type != "address":
             return False
         return not transactions or any(item.claim_key == "address_discovery_explorer_missing" for item in evidence)
+
+    def _is_transaction_observation_report(self, case, evidence: list, findings: list) -> bool:
+        if case.seed_type != "transaction":
+            return False
+        if case.attack_type:
+            return False
+        if case.severity not in {"info", "unknown", "low"}:
+            return False
+        if any(f.severity in {"medium", "high", "critical"} for f in findings):
+            return False
+        return not any(
+            (
+                self._revert_facts(evidence),
+                self._purrlend_facts(evidence),
+                self._bunni_facts(evidence),
+                self._scallop_facts(evidence),
+                self._receipt_facts(evidence),
+                self._incident_facts(evidence),
+            )
+        )
+
+    def _transaction_scope_facts(self, evidence: list) -> dict[str, Any]:
+        tx_evidence = next((item for item in evidence if item.claim_key == "transaction_in_case_scope"), None)
+        decoded = dict(tx_evidence.decoded or {}) if tx_evidence else {}
+        metadata = decoded.get("metadata") or {}
+        return {
+            **decoded,
+            "input": metadata.get("input", "0x"),
+            "log_count": metadata.get("log_count", 0),
+        }
+
+    def _native_transfer_facts(self, evidence: list) -> dict[str, Any]:
+        item = next((row for row in evidence if row.claim_key == "native_value_transfer"), None)
+        if item:
+            return dict(item.decoded or {})
+        fund_flow = next((row for row in evidence if row.claim_key == "fund_flow_edges"), None)
+        edges = (fund_flow.decoded or {}).get("fund_flow_edges") if fund_flow else []
+        return dict(edges[0]) if edges else {}
+
+    def _native_transfer_summary(self, flow: dict[str, Any]) -> str:
+        if not flow:
+            return "未发现 native value 或 token transfer evidence"
+        return f"{self._native_transfer_amount(flow)} {flow.get('asset', 'native')} 从 `{flow.get('from', '-')}` 转至 `{flow.get('to', '-')}`"
+
+    def _native_transfer_amount(self, flow: dict[str, Any]) -> str:
+        raw = flow.get("amount_raw") or flow.get("amount")
+        if raw in {None, ""}:
+            return "-"
+        try:
+            if flow.get("asset") == "native":
+                return f"{self._wei_to_eth(raw):.18f}".rstrip("0").rstrip(".")
+        except Exception:
+            return str(raw)
+        return str(raw)
+
+    def _wei_to_eth(self, value: Any) -> float:
+        return float(value) / 1_000_000_000_000_000_000
 
     def _address_boundary_tldr(self, case, evidence: list) -> str:
         env = self._environment_facts(evidence, [])
@@ -435,6 +498,20 @@ class ReportService:
         scallop = self._scallop_facts(evidence)
         if scallop:
             return self._scallop_tldr(case, timeline, evidence, scallop)
+        if self._is_transaction_observation_report(case, evidence, []):
+            tx = self._transaction_scope_facts(evidence)
+            flow = self._native_transfer_facts(evidence)
+            lines = [
+                "> **报告类型:** 链上交易预分析，不是攻击 RCA",
+                f"> **链:** {case.network.name} (Chain ID: {case.network.chain_id})",
+                f"> **核心交易:** `{tx.get('tx_hash', case.seed_value)}`",
+                f"> **执行结果:** status={tx.get('status', '-')}，block={tx.get('block_number', '-')}",
+                f"> **调用特征:** input={tx.get('input', '0x')}，receipt logs={tx.get('log_count', 0)}",
+                f"> **资金移动:** {self._native_transfer_summary(flow)}",
+                "> **结论:** 当前 evidence 只能证明一笔普通链上转账或交易执行，不能证明攻击、漏洞根因或协议损失。",
+                f"> **置信度:** {case.confidence}",
+            ]
+            return "\n".join(lines)
         receipt = self._receipt_facts(evidence)
         incident = self._incident_facts(evidence)
         lines = [
@@ -476,6 +553,17 @@ class ReportService:
         scallop = self._scallop_facts(evidence)
         if scallop:
             return self._scallop_overview(case, timeline, evidence, findings, scallop)
+        if self._is_transaction_observation_report(case, evidence, findings):
+            tx = self._transaction_scope_facts(evidence)
+            flow = self._native_transfer_facts(evidence)
+            return "\n\n".join(
+                [
+                    f"`{case.network.name}` 上的 seed 值 `{case.seed_value}` 是一笔交易哈希，不是地址。系统已通过 receipt + full block fallback 取回交易字段。",
+                    f"该交易在 block `{tx.get('block_number', '-')}` 执行，from `{tx.get('from', '-')}`，to `{tx.get('to', '-')}`，input `{tx.get('input', '0x')}`，receipt logs `{tx.get('log_count', 0)}`。",
+                    f"资金层面只确认：{self._native_transfer_summary(flow)}。没有 ERC20/721 Transfer logs、Approval logs、合约 calldata 或异常 trace 输出。",
+                    "因此本报告只作为交易事实核验和证据边界说明，不把该交易描述为攻击事件。",
+                ]
+            )
         receipt = self._receipt_facts(evidence)
         incident = self._incident_facts(evidence)
         txanalyzer = self._txanalyzer_facts(evidence)
@@ -532,6 +620,28 @@ class ReportService:
         scallop = self._scallop_facts(evidence)
         if scallop:
             return self._scallop_entities(case, transactions, evidence, scallop)
+        if self._is_transaction_observation_report(case, evidence, FindingService(self.db).list_for_case(case.id)):
+            rows = [
+                ("目标链", f"{case.network.name} ({case.network.chain_id})", "交易所在网络", "network config"),
+                ("Seed", case.seed_value, case.seed_type, "case seed"),
+            ]
+            for tx in transactions:
+                if tx.from_address:
+                    rows.append(("From", tx.from_address, "交易发送方", tx.tx_hash))
+                if tx.to_address:
+                    rows.append(("To", tx.to_address, "交易接收方", tx.tx_hash))
+            evidence_rows = [
+                (item.producer, item.source_type, item.claim_key, item.confidence)
+                for item in evidence[:8]
+            ]
+            return "\n\n".join(
+                [
+                    "### 2.1 交易参与方",
+                    self._table(["标识", "地址 / 对象", "角色", "证据"], rows),
+                    "### 2.2 已采集证据来源",
+                    self._table(["Producer", "Source Type", "Claim", "Confidence"], evidence_rows) if evidence_rows else "暂无 evidence。",
+                ]
+            )
         receipt = self._receipt_facts(evidence)
         incident = self._incident_facts(evidence)
         rows = [
@@ -591,6 +701,25 @@ class ReportService:
         scallop = self._scallop_facts_from_case_evidence(case.id)
         if scallop:
             return self._scallop_timeline(case, timeline, scallop)
+        evidence = EvidenceService(self.db).list_for_case(case.id)
+        findings = FindingService(self.db).list_for_case(case.id)
+        if self._is_transaction_observation_report(case, evidence, findings):
+            tx = self._transaction_scope_facts(evidence)
+            rows = [
+                (
+                    "Tx 1",
+                    self._format_dt(tx.get("timestamp")),
+                    tx.get("tx_hash", case.seed_value),
+                    "native transfer" if tx.get("value_wei") else "transaction execution",
+                    f"block={tx.get('block_number', '-')}; status={tx.get('status', '-')}",
+                )
+            ]
+            return "\n\n".join(
+                [
+                    "本节展示交易执行时间线，不代表攻击阶段划分。",
+                    self._table(["Step", "时间", "Tx", "动作", "证据"], rows),
+                ]
+            )
         receipt = self._receipt_facts_from_case_evidence(case.id)
         incident = self._incident_facts_from_case_evidence(case.id)
         txanalyzer = self._txanalyzer_facts_from_case_evidence(case.id)
@@ -684,6 +813,24 @@ class ReportService:
         scallop = self._scallop_facts(evidence)
         if scallop:
             return self._scallop_root_cause(case, findings, evidence, scallop)
+        if self._is_transaction_observation_report(case, evidence, findings):
+            tx = self._transaction_scope_facts(evidence)
+            return "\n\n".join(
+                [
+                    "### 4.1 结论",
+                    "当前没有建立攻击根因。已确认的是一笔成功链上交易；没有 calldata、事件日志、合约状态变化或 TxAnalyzer trace 支撑漏洞结论。",
+                    "### 4.2 为什么不能写成攻击",
+                    self._table(
+                        ["检查项", "结果", "解释"],
+                        [
+                            ("input / calldata", tx.get("input", "0x"), "为空时通常表示普通原生资产转账或无参数调用。"),
+                            ("receipt logs", str(tx.get("log_count", 0)), "没有 Transfer/Approval/协议事件，不能推导 token 或协议状态变化。"),
+                            ("合约交互", "未确认", "from/to 代码和 trace 仍需额外 provider evidence；当前只按交易事实记录。"),
+                            ("损失口径", "未建立", "单笔转账金额不等同于协议损失。"),
+                        ],
+                    ),
+                ]
+            )
         receipt = self._receipt_facts(evidence)
         incident = self._incident_facts(evidence)
         txanalyzer = self._txanalyzer_facts(evidence)
@@ -826,6 +973,25 @@ class ReportService:
         scallop = self._scallop_facts(evidence)
         if scallop:
             return self._scallop_financial_impact(case, evidence, scallop)
+        if self._is_transaction_observation_report(case, evidence, FindingService(self.db).list_for_case(case.id)):
+            flow = self._native_transfer_facts(evidence)
+            rows = [
+                (
+                    flow.get("asset", "native"),
+                    self._native_transfer_amount(flow),
+                    flow.get("from", "-"),
+                    flow.get("to", "-"),
+                    flow.get("tx_hash", case.seed_value),
+                )
+            ]
+            return "\n\n".join(
+                [
+                    "### 5.1 已确认资金移动",
+                    self._table(["资产", "数量", "From", "To", "证据"], rows),
+                    "### 5.2 损失边界",
+                    "这笔转账金额只代表交易内的 native value，不代表安全事件收益或协议损失。当前没有价格影响、借贷、兑换或后续归集证据。",
+                ]
+            )
         receipt = self._receipt_facts(evidence)
         incident = self._incident_facts(evidence)
         txanalyzer = self._txanalyzer_facts(evidence)

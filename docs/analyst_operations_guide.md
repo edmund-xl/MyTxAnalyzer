@@ -21,6 +21,10 @@
 - `地址`：适合只有攻击者或合约地址时使用。EVM 地址必须是 `0x` + 40 位十六进制字符；EVM 地址扩展依赖 Explorer API key，没有 key 时系统只记录降级 evidence boundary，不伪造交易。
 - `外部事件链接`：适合只有 DefiLlama、官方复盘或新闻链接时先建案。系统会记录 external alert evidence，等待后续补 seed transaction。
 
+MegaETH 公共 RPC 可能出现 `eth_getTransactionByHash` 返回空、但 receipt 正常存在的情况。系统会自动用 receipt 的 block number 拉取 full block，再按 hash 找回交易字段；如果 full block 也不可用，报告会写成 provider evidence boundary。
+
+单笔 native value transfer 只证明资金移动，不自动等同于攻击、损失或漏洞根因。没有 calldata、事件日志、合约/trace 异常或外部事件证据时，报告会写成“链上交易预分析报告”。
+
 ### 3. 配置 RPC / Explorer Key
 
 密钥只放在 `.env` 或运行环境变量里，不能入库、不能提交。
@@ -126,6 +130,10 @@ After creation, open the case detail page and click `Run Analysis` to start the 
 - `Transaction hash / Digest`: highest evidence quality. EVM pulls transaction, receipt, logs, and TxAnalyzer artifacts where possible; Sui uses Sui JSON-RPC.
 - `Address`: useful when only an attacker or contract address is known. EVM addresses must be `0x` plus 40 hex characters. EVM address expansion requires an Explorer API key; without a key the system records a degradation evidence boundary and does not fabricate transactions.
 - `External incident link`: useful when only DefiLlama, an official postmortem, or a news link is available. The system records external alert evidence and waits for a later seed transaction.
+
+MegaETH public RPC may return an empty `eth_getTransactionByHash` response while the receipt is available. The system automatically uses the receipt block number to fetch the full block and recover transaction fields by hash; if the full block is also unavailable, the report must stay within a provider evidence boundary.
+
+A single native value transfer proves asset movement only. It is not automatically treated as an exploit, loss, or root cause. Without calldata, event logs, contract/trace anomalies, or external incident evidence, the report is generated as an “on-chain transaction pre-analysis report”.
 
 ### 3. Configure RPC / Explorer Keys
 

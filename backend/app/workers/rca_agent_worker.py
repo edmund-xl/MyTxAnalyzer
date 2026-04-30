@@ -100,7 +100,7 @@ class RCAAgentWorker:
         if any(f.finding_type == "multisig" for f in findings):
             return "Evidence indicates a multisig execution path is relevant; signer attribution requires reviewer validation."
         if any(f.finding_type == "fund_flow" for f in findings):
-            return "Evidence confirms asset movement; root cause still requires permission/source/trace correlation."
+            return "Evidence confirms asset movement only; no exploit root cause is established without permission, source, trace, price-impact, or incident correlation."
         return "No high-confidence root cause has been established from available evidence."
 
     def _attack_type(self, findings) -> str | None:
@@ -116,7 +116,7 @@ class RCAAgentWorker:
             return "access_control_abuse"
         if any(f.finding_type == "multisig" for f in findings):
             return "multisig_authorization"
-        if any(f.finding_type == "fund_flow" for f in findings):
+        if any(f.finding_type == "fund_flow" and f.severity in {"medium", "high", "critical"} for f in findings):
             return "fund_flow"
         return None
 
