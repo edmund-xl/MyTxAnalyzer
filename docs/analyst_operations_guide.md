@@ -54,6 +54,17 @@ High/Critical finding 必须绑定 deterministic evidence。当前 deterministic
 
 如果只存在公开文章、新闻或 provider degradation evidence，报告只能写“证据边界”，不能写成确定性攻击结论。
 
+### 4.1 地址线索报告的边界
+
+当入口类型是 `地址` 且系统没有拿到 txlist/receipt/trace 时，报告会生成“地址线索预分析报告”，而不是“攻击事件分析报告”。该报告只说明：
+
+- 地址已被记录为线索。
+- RPC / Explorer 能力检查结果。
+- 为什么当前不能确认攻击者、受害协议、根因或损失。
+- 进入正式 RCA 所需的确定条件：seed transaction 或 Explorer txlist。
+
+这类报告不应出现“铸造虚假抵押品”“借出真实资产”“跨链转出”等攻击段落，除非已有 deterministic transfer / receipt / trace evidence。
+
 ### 5. Approve / Reject Finding
 
 在 case 详情页打开 `Findings`：
@@ -146,6 +157,17 @@ High/Critical findings must bind deterministic evidence. Current deterministic e
 - `tx_metadata`
 
 If only public articles, news, or provider degradation evidence exists, the report must describe evidence boundaries instead of deterministic conclusions.
+
+### 4.1 Boundary For Address-Seed Reports
+
+When the entry type is `Address` and the system has no txlist, receipt, or trace data, the report is generated as an “address lead pre-analysis report”, not an “attack incident RCA report”. It only states:
+
+- The address has been recorded as a lead.
+- RPC / Explorer capability results.
+- Why attacker, victim protocol, root cause, and loss cannot be confirmed yet.
+- The deterministic condition required for formal RCA: a seed transaction or Explorer txlist.
+
+These reports should not include attack-stage sections such as “fake collateral mint”, “real asset borrow”, or “bridge outflow” unless deterministic transfer / receipt / trace evidence exists.
 
 ### 5. Approve / Reject Findings
 

@@ -28,21 +28,38 @@ class RCAAgentWorker:
             findings = FindingService(self.db).list_for_case(case_id)
             if not findings and evidence:
                 deterministic = [item.id for item in evidence if item.source_type != "agent_inference"]
-                FindingService(self.db).create_finding(
-                    case_id,
-                    FindingCreate(
-                        title="Evidence-backed RCA draft requires reviewer analysis",
-                        finding_type="data_quality",
-                        severity="info",
-                        confidence="medium",
-                        claim="The system collected evidence but did not identify a specialized high-risk RCA finding automatically.",
-                        rationale="This local RCA worker avoids unsupported conclusions when only generic evidence is available.",
-                        falsification="Run ACL/Safe/FundFlow modules with complete artifacts to raise confidence.",
-                        evidence_ids=deterministic[:5],
-                        requires_reviewer=True,
-                        created_by=self.name,
-                    ),
-                )
+                if self._address_seed_without_scope(case, evidence):
+                    FindingService(self.db).create_finding(
+                        case_id,
+                        FindingCreate(
+                            title="Address seed did not produce a transaction scope",
+                            finding_type="evidence_boundary",
+                            severity="info",
+                            confidence="partial",
+                            claim="The address seed was recorded, but no transaction list, receipt log, or fund-flow evidence was collected for this case.",
+                            rationale="Address-based RCA requires an explorer txlist API key or a concrete seed transaction. The current public RPC fallback can verify the network, but it cannot enumerate address history.",
+                            falsification="Provide a seed transaction hash or configure the network explorer API key, then rerun discovery and TxAnalyzer.",
+                            evidence_ids=deterministic[:5],
+                            requires_reviewer=True,
+                            created_by=self.name,
+                        ),
+                    )
+                else:
+                    FindingService(self.db).create_finding(
+                        case_id,
+                        FindingCreate(
+                            title="Evidence-backed RCA draft requires reviewer analysis",
+                            finding_type="data_quality",
+                            severity="info",
+                            confidence="medium",
+                            claim="The system collected evidence but did not identify a specialized high-risk RCA finding automatically.",
+                            rationale="This local RCA worker avoids unsupported conclusions when only generic evidence is available.",
+                            falsification="Run ACL/Safe/FundFlow modules with complete artifacts to raise confidence.",
+                            evidence_ids=deterministic[:5],
+                            requires_reviewer=True,
+                            created_by=self.name,
+                        ),
+                    )
             refreshed_findings = FindingService(self.db).list_for_case(case_id)
             root = self._root_cause(refreshed_findings)
             case.root_cause_one_liner = root
@@ -70,6 +87,8 @@ class RCAAgentWorker:
             return WorkerResult(case_id=case_id, worker_name=self.name, status="failed", summary={}, error=str(exc))
 
     def _root_cause(self, findings) -> str:
+        if any(f.finding_type == "evidence_boundary" for f in findings):
+            return "Address seed did not produce a transaction scope; no attack root cause is established from the current evidence."
         if any(f.finding_type == "revert_collateralized_position_solvency_check_missing" for f in findings):
             return "Revert Finance evidence indicates a missing solvency constraint in the staking/management path allowed collateralized LP NFT liquidity to be withdrawn while debt remained outstanding."
         if any(f.finding_type == "scallop_deprecated_reward_contract" for f in findings):
@@ -85,6 +104,8 @@ class RCAAgentWorker:
         return "No high-confidence root cause has been established from available evidence."
 
     def _attack_type(self, findings) -> str | None:
+        if any(f.finding_type == "evidence_boundary" for f in findings):
+            return "address_scope_boundary"
         if any(f.finding_type == "revert_collateralized_position_solvency_check_missing" for f in findings):
             return "collateralized_lp_position_solvency_check_missing"
         if any(f.finding_type == "scallop_deprecated_reward_contract" for f in findings):
@@ -114,3 +135,6 @@ class RCAAgentWorker:
             if confidence in confidences:
                 return confidence
         return "low"
+
+    def _address_seed_without_scope(self, case, evidence) -> bool:
+        return case.seed_type == "address" and any(item.claim_key == "address_discovery_explorer_missing" for item in evidence)

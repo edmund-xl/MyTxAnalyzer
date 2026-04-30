@@ -7,6 +7,7 @@ class ReportRendererRegistry:
     """Classify a case into a reusable attack-type renderer key."""
 
     ORDERED_RENDERERS = [
+        "address_scope_boundary",
         "amm_rounding_liquidity",
         "collateral_solvency_bypass",
         "cross_contract_reentrancy",
@@ -21,11 +22,14 @@ class ReportRendererRegistry:
         text = " ".join(
             [
                 str(case.attack_type or ""),
+                str(case.seed_type or ""),
                 str(case.root_cause_one_liner or ""),
                 " ".join(str(f.finding_type) for f in findings),
                 " ".join(str(item.claim_key) for item in evidence),
             ]
         ).lower()
+        if "address_scope_boundary" in text or ("address" in text and "address_discovery_explorer_missing" in text):
+            return "address_scope_boundary"
         if "bunni" in text or "rounding" in text or "liquidity" in text and "amm" in text:
             return "amm_rounding_liquidity"
         if "revert" in text or "collateralized" in text or "solvency" in text:

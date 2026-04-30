@@ -137,6 +137,9 @@ class ReportService:
         transactions = case_service.list_transactions(case_id)
         evidence = EvidenceService(self.db).list_for_case(case_id)
         findings = [finding for finding in FindingService(self.db).list_for_case(case_id) if finding.reviewer_status != "rejected"]
+        address_boundary = self._is_address_scope_boundary(case, transactions, evidence)
+        if address_boundary:
+            findings = [finding for finding in findings if finding.finding_type == "evidence_boundary"]
         diagrams = DiagramService(self.db, self.object_store).generate_for_case(case_id, created_by="report_worker")
         if any(finding.severity in {"critical", "high"} for finding in findings):
             findings = [
@@ -147,29 +150,44 @@ class ReportService:
         jobs = list(self.db.scalars(select(JobRun).where(JobRun.case_id == case_id).order_by(JobRun.created_at)).all())
         evidence_ids = [item.id for item in evidence]
 
-        bodies = {
-            "TL;DR": self._tldr(case, timeline, evidence),
-            "1. 概述": self._overview(case, timeline, evidence, findings),
-            "2. 涉事方": self._entities(case, transactions, evidence),
-            "3. 攻击时间线": self._timeline(case, timeline),
-            "4. 数据流图": self._diagrams(diagrams),
-            "5. 根因分析": self._root_cause(case, findings, evidence),
-            "6. 财务影响": self._financial_impact(case, evidence),
-            "7. 分析链路与方法论": self._methodology(case, jobs, evidence),
-            "8. 总分析时长": self._analysis_duration(jobs),
-            "附录": self._appendix(transactions, evidence, jobs),
-        }
+        if address_boundary:
+            bodies = {
+                "TL;DR": self._address_boundary_tldr(case, evidence),
+                "1. 概述": self._address_boundary_overview(case, evidence, findings),
+                "2. 涉事方": self._address_boundary_entities(case, evidence),
+                "3. 攻击时间线": self._address_boundary_timeline(case),
+                "4. 数据流图": self._diagrams(diagrams),
+                "5. 根因分析": self._address_boundary_root_cause(case, evidence, findings),
+                "6. 财务影响": self._address_boundary_financial_impact(case, evidence),
+                "7. 分析链路与方法论": self._address_boundary_methodology(case, jobs, evidence),
+                "8. 总分析时长": self._analysis_duration(jobs),
+                "附录": self._address_boundary_appendix(evidence, jobs),
+            }
+        else:
+            bodies = {
+                "TL;DR": self._tldr(case, timeline, evidence),
+                "1. 概述": self._overview(case, timeline, evidence, findings),
+                "2. 涉事方": self._entities(case, transactions, evidence),
+                "3. 攻击时间线": self._timeline(case, timeline),
+                "4. 数据流图": self._diagrams(diagrams),
+                "5. 根因分析": self._root_cause(case, findings, evidence),
+                "6. 财务影响": self._financial_impact(case, evidence),
+                "7. 分析链路与方法论": self._methodology(case, jobs, evidence),
+                "8. 总分析时长": self._analysis_duration(jobs),
+                "附录": self._appendix(transactions, evidence, jobs),
+            }
         sections: list[dict[str, Any]] = []
         for title in REPORT_SECTION_TITLES:
             body = bodies[title]
-            supported = bool(evidence_ids) or title in {"4. 数据流图", "8. 总分析时长"}
+            boundary_partial = address_boundary and title in {"3. 攻击时间线", "5. 根因分析", "6. 财务影响"}
+            supported = (bool(evidence_ids) or title in {"4. 数据流图", "8. 总分析时长"}) and not boundary_partial
             sections.append(
                 {
                     "title": title,
                     "body_markdown": body,
                     "evidence_ids": evidence_ids if evidence_ids else [],
-                    "coverage": 1.0 if supported else 0.0,
-                    "status": "supported" if supported else "partial",
+                    "coverage": 1.0 if supported else (0.35 if boundary_partial else 0.0),
+                    "status": "supported" if supported else "boundary" if boundary_partial else "partial",
                 }
             )
         return sections
@@ -188,13 +206,221 @@ class ReportService:
     def _render_markdown(self, case_id: str, sections: list[dict[str, Any]]) -> str:
         case = CaseService(self.db).get_case(case_id)
         title = case.title or "On-chain RCA"
-        lines = [f"# {title} 攻击事件分析报告", ""]
+        transactions = CaseService(self.db).list_transactions(case_id, limit=1)
+        evidence = EvidenceService(self.db).list_for_case(case_id)
+        suffix = "地址线索预分析报告" if self._is_address_scope_boundary(case, transactions, evidence) else "攻击事件分析报告"
+        lines = [f"# {title} {suffix}", ""]
         for section in sections:
             lines.extend([f"## {section['title']}", "", section["body_markdown"], ""])
         return "\n\n".join(lines)
 
     def _diagrams(self, diagrams: list) -> str:
         return DiagramService(self.db, self.object_store).markdown_for_diagrams(diagrams)
+
+    def _is_address_scope_boundary(self, case, transactions: list, evidence: list) -> bool:
+        if case.seed_type != "address":
+            return False
+        return not transactions or any(item.claim_key == "address_discovery_explorer_missing" for item in evidence)
+
+    def _address_boundary_tldr(self, case, evidence: list) -> str:
+        env = self._environment_facts(evidence, [])
+        boundary = self._address_discovery_boundary(evidence)
+        return "\n".join(
+            [
+                "> **报告类型:** 地址线索预分析，不是完整攻击 RCA",
+                f"> **链:** {case.network.name} (Chain ID: {case.network.chain_id})",
+                f"> **输入地址:** `{case.seed_value}`",
+                f"> **当前结论:** 未形成交易范围；不能确认攻击路径、根因或损失。",
+                f"> **RPC 状态:** chainId={env.get('chain_id', '-')}，rpc_ok={env.get('rpc_ok', '-')}, source={env.get('rpc_source', '-')}",
+                f"> **地址扩展:** {boundary.get('boundary', 'Explorer txlist 未完成')}",
+                "> **下一步进入正式 RCA 的条件:** 提供 seed transaction，或配置该网络 Explorer API key 后重新运行。",
+            ]
+        )
+
+    def _address_boundary_overview(self, case, evidence: list, findings: list) -> str:
+        boundary = self._address_discovery_boundary(evidence)
+        env = self._environment_facts(evidence, [])
+        finding = findings[0] if findings else None
+        paragraphs = [
+            (
+                f"`{case.title or case.id}` 是从地址 `{case.seed_value}` 创建的线索 case。"
+                "当前系统已完成网络连通性检查，并记录地址发现阶段的能力边界；但没有获得任何属于本 case 的交易列表、receipt logs、trace 或资金流。"
+            ),
+            (
+                "因此，本报告只回答一个问题：目前这条地址线索是否已经足以进入攻击 RCA。答案是：还不够。"
+                "Workbench 不会把一个孤立地址直接写成攻击者、受害合约、资金流或根因。"
+            ),
+            (
+                f"本案 RPC 检查结果为 chainId `{env.get('chain_id', '-')}`，rpc_ok=`{env.get('rpc_ok', '-')}`；"
+                f"Explorer key 来源为 `{boundary.get('explorer_key_source', 'missing')}`。"
+                "公共 RPC 可以做链 ID 和单笔交易查询，但不能枚举地址历史；地址扩展需要 Explorer txlist 或用户补 seed transaction。"
+            ),
+            f"当前 evidence 数量：`{len(evidence)}`。当前 finding：`{finding.title if finding else '无'}`。这些内容仅支撑“证据边界”，不支撑攻击结论。",
+        ]
+        return "\n\n".join(paragraphs)
+
+    def _address_boundary_entities(self, case, evidence: list) -> str:
+        env = self._environment_facts(evidence, [])
+        boundary = self._address_discovery_boundary(evidence)
+        scope_rows = [
+            ("目标链", f"{case.network.name} ({case.network.chain_id})", "已确认网络范围", "environment_capability"),
+            ("输入地址", case.seed_value, "线索地址；尚未定性为攻击者或受害合约", "case seed"),
+            ("RPC 来源", env.get("rpc_source", "-"), "网络连通性来源", "environment_capability"),
+            ("Explorer 状态", boundary.get("explorer_key_source", "missing"), "txlist/source enrichment 能力", "address_discovery_explorer_missing"),
+        ]
+        evidence_rows = [(item.producer, item.source_type, item.claim_key, item.confidence) for item in evidence]
+        return "\n\n".join(
+            [
+                "### 2.1 当前可确认对象",
+                self._table(["对象", "值", "角色", "证据"], scope_rows),
+                "### 2.2 当前不能确认的对象",
+                self._table(
+                    ["对象", "当前状态", "原因", "处理方式"],
+                    [
+                        ("攻击者", "不能确认", "没有交易发起方、资金流或合约调用证据", "等待 txlist 或 seed tx"),
+                        ("受害协议", "不能确认", "地址本身不等于协议身份或漏洞位置", "等待合约源码/ABI/交易上下文"),
+                        ("接收地址", "不能确认", "没有 Transfer / balance diff evidence", "等待 receipt logs 和 fund-flow worker"),
+                    ],
+                ),
+                "### 2.3 已采集证据来源",
+                self._table(["Producer", "Source Type", "Claim", "Confidence"], evidence_rows) if evidence_rows else "暂无 evidence。",
+            ]
+        )
+
+    def _address_boundary_timeline(self, case) -> str:
+        return "\n".join(
+            [
+                "当前没有链上交易时间线。",
+                "",
+                "```text",
+                f"Phase 0: 用户输入地址 -> {case.seed_value}",
+                "Phase 1: 网络能力检查 -> 已完成",
+                "Phase 2: 地址 txlist 扩展 -> 未完成，原因是 Explorer API key 缺失或不可用",
+                "Phase 3: 正式攻击 RCA -> 尚未开始；需要 seed transaction 或 txlist 结果",
+                "```",
+                "",
+                "这不是攻击时间线，而是线索处理状态。报告不会把缺失交易的地址 case 展开成调用链。"
+            ]
+        )
+
+    def _address_boundary_root_cause(self, case, evidence: list, findings: list) -> str:
+        finding_rows = [
+            (
+                self._finding_title(finding),
+                finding.finding_type,
+                finding.severity,
+                finding.confidence,
+                finding.reviewer_status,
+                f"{len(finding.evidence_ids)} 条 evidence",
+            )
+            for finding in findings
+        ]
+        return "\n\n".join(
+            [
+                "### 4.1 根因结论",
+                "当前没有根因结论。原因不是“根因未知但疑似某类漏洞”，而是交易范围尚未建立：没有 seed transaction、receipt logs、trace、source 或资金流 evidence。",
+                "### 4.2 当前 finding 的含义",
+                self._table(["Finding", "Type", "Severity", "Confidence", "Review", "Evidence"], finding_rows) if finding_rows else "暂无 finding。",
+                "### 4.3 明确排除的写法",
+                "\n".join(
+                    [
+                        "- 不把输入地址直接写成攻击者。",
+                        "- 不把网络 capability 写成漏洞证据。",
+                        "- 不把 Explorer key 缺失写成协议问题。",
+                        "- 不估算损失，不输出攻击路径，不生成合约根因。"
+                    ]
+                ),
+                "### 4.4 进入根因分析所需条件",
+                "\n".join(
+                    [
+                        "1. 提供至少一笔 seed transaction；或",
+                        "2. 配置该网络 Explorer API key，使 address txlist 可返回交易；然后",
+                        "3. 对候选交易运行 receipt/log 标准化、TxAnalyzer artifact pull、FundFlow 和 RCA finding generation。"
+                    ]
+                ),
+            ]
+        )
+
+    def _address_boundary_financial_impact(self, case, evidence: list) -> str:
+        loss = next((item for item in evidence if item.claim_key == "loss_calculation_status"), None)
+        return "\n\n".join(
+            [
+                "### 5.1 当前财务结论",
+                "当前不能确认损失金额。没有交易范围时，系统无法判断该地址是否发生资产转入、转出、borrow、swap、bridge 或清算。",
+                "### 5.2 已执行的损失计算状态",
+                self._table(
+                    ["字段", "值"],
+                    [
+                        ("fund_flow_evidence_count", (loss.decoded or {}).get("fund_flow_evidence_count", 0) if loss else 0),
+                        ("fund_flow_edge_count", (loss.decoded or {}).get("fund_flow_edge_count", 0) if loss else 0),
+                        ("usd_loss", (loss.decoded or {}).get("usd_loss") if loss else None),
+                        ("reason", (loss.decoded or {}).get("reason", "No fund-flow evidence") if loss else "No fund-flow evidence"),
+                    ],
+                ),
+                "### 5.3 不输出的内容",
+                "本报告不列“虚假抵押品”“借出真实资产”“跨链转出”等攻击段落，因为这些都需要 deterministic transfer / receipt / trace evidence 支撑。",
+            ]
+        )
+
+    def _address_boundary_methodology(self, case, jobs: list[JobRun], evidence: list) -> str:
+        env = self._environment_facts(evidence, jobs)
+        latest_jobs = self._latest_jobs(jobs)
+        job_rows = [(job.job_name, job.status, self._format_dt(job.started_at or job.created_at), job.error or "-") for job in latest_jobs]
+        capability_rows = [
+            ("RPC chainId", env.get("chain_id", "-"), "网络验证", env.get("rpc_source", "-")),
+            ("eth_getTransactionReceipt", env.get("capability_matrix", {}).get("eth_getTransactionReceipt", False), "单笔交易 receipt", "需要 tx hash"),
+            ("Explorer txlist/getsourcecode", env.get("capability_matrix", {}).get("explorer_txlist_getsourcecode", False), "地址扩展 / 源码", "需要 API key"),
+            ("trace_transaction", env.get("trace_transaction_ok", False), "调用链", "需要 tx hash 和 provider 支持"),
+            ("debug_traceTransaction", env.get("debug_trace_transaction_ok", False), "opcode", "需要 tx hash 和 provider 支持"),
+        ]
+        return "\n\n".join(
+            [
+                "### 6.1 本案实际执行结果",
+                self._table(["检查项", "结果", "用途", "边界"], capability_rows),
+                "### 6.2 地址输入的正确处理方式",
+                "\n".join(
+                    [
+                        "1. 先确认网络 RPC 可用。",
+                        "2. 使用 Explorer txlist 按地址和时间窗口发现候选交易。",
+                        "3. 对候选交易逐笔拉 receipt/logs，并筛选与攻击相关的交易。",
+                        "4. 对核心交易运行 TxAnalyzer 和 forensic workers。",
+                        "5. 只有出现 deterministic evidence 后，才生成攻击 RCA 结论。"
+                    ]
+                ),
+                "### 6.3 本案 worker 执行记录",
+                self._table(["Worker", "Status", "Started", "Error"], job_rows) if job_rows else "暂无 job run。",
+                "### 6.4 数据可靠性",
+                "当前报告可靠地表达了“证据不足和 provider 边界”；它不可靠地表达攻击路径，因此本版不输出攻击路径结论。",
+            ]
+        )
+
+    def _address_boundary_appendix(self, evidence: list, jobs: list[JobRun]) -> str:
+        evidence_rows = [(item.id, item.source_type, item.producer, item.claim_key, item.confidence, item.raw_path or "-") for item in evidence]
+        job_rows = [(job.job_name, job.status, self._format_dt(job.started_at or job.created_at), job.error or "-") for job in self._latest_jobs(jobs)]
+        return "\n\n".join(
+            [
+                "### A.1 交易列表",
+                "暂无交易。地址 seed 需要 Explorer txlist 或用户提供 seed transaction 后才能建立交易列表。",
+                "### A.2 Evidence 列表",
+                self._table(["ID", "Source", "Producer", "Claim", "Confidence", "Raw Path"], evidence_rows) if evidence_rows else "暂无 evidence。",
+                "### A.3 Worker 最新执行记录",
+                self._table(["Worker", "Status", "Started", "Error"], job_rows) if job_rows else "暂无 job run。",
+                "### A.4 复核结论",
+                self._table(
+                    ["复核项", "结论", "证据 / 说明"],
+                    [
+                        ("地址是否已记录", "是", "case seed"),
+                        ("网络是否可连通", "见 environment_capability", "environment_check_worker"),
+                        ("是否有攻击交易", "否", "没有 txlist / receipt / trace"),
+                        ("是否能发布攻击 RCA", "否", "当前只能发布地址线索预分析"),
+                    ],
+                ),
+            ]
+        )
+
+    def _address_discovery_boundary(self, evidence: list) -> dict[str, Any]:
+        item = next((row for row in evidence if row.claim_key == "address_discovery_explorer_missing"), None)
+        return item.decoded if item and isinstance(item.decoded, dict) else {}
 
     def _tldr(self, case, timeline: list[dict], evidence: list) -> str:
         revert = self._revert_facts(evidence)

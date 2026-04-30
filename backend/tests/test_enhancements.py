@@ -11,6 +11,8 @@ from app.services.evidence_service import EvidenceService
 from app.services.report_renderer_registry import ReportRendererRegistry
 from app.services.workflow_run_service import WorkflowRunService
 from app.workers.fund_flow_worker import FundFlowWorker
+from app.workers.rca_agent_worker import RCAAgentWorker
+from app.workers.tx_discovery_worker import TxDiscoveryWorker
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT / "scripts") not in sys.path:
@@ -160,3 +162,29 @@ def test_performance_seed_smoke(db_session):
     result = seed_performance_data(db_session, case_count=3, evidence_count=7, job_count=5, report_count=3, diagram_count=9, export_count=2, reset=True)
 
     assert result == {"cases": 3, "evidence": 7, "jobs": 5, "reports": 3, "diagrams": 9, "exports": 2}
+
+
+def test_address_seed_report_is_boundary_not_attack_rca(client, db_session, monkeypatch):
+    monkeypatch.delenv("ETHERSCAN_API_KEY", raising=False)
+    monkeypatch.delenv("ETH_EXPLORER_API_KEY", raising=False)
+    case = client.post(
+        "/api/cases",
+        json={
+            "network_key": "eth",
+            "seed_type": "address",
+            "seed_value": "0x" + "1" * 40,
+            "depth": "full",
+        },
+    ).json()
+
+    discovery = TxDiscoveryWorker(db_session).run(case["id"])
+    rca = RCAAgentWorker(db_session).run(case["id"])
+    report = client.post(f"/api/cases/{case['id']}/reports", json={"format": "markdown"})
+    content = client.get(f"/api/cases/{case['id']}/reports/{report.json()['id']}").json()["content"]
+
+    assert discovery.status == "partial"
+    assert rca.status == "success"
+    assert "地址线索预分析报告" in content
+    assert "不是完整攻击 RCA" in content
+    assert "不能确认攻击路径、根因或损失" in content
+    assert "铸造虚假抵押品" not in content

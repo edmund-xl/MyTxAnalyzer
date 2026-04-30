@@ -33,6 +33,8 @@ class DiagramService:
         transactions = case_service.list_transactions(case_id)
         evidence = EvidenceService(self.db).list_for_case(case_id)
         findings = [item for item in FindingService(self.db).list_for_case(case_id) if item.reviewer_status != "rejected"]
+        if self._is_address_scope_boundary(evidence) and not transactions:
+            findings = [item for item in findings if item.finding_type == "evidence_boundary"]
         if any(item.severity in {"critical", "high"} for item in findings):
             findings = [
                 item
@@ -60,6 +62,7 @@ class DiagramService:
             diagram = by_type.get(diagram_type)
             if diagram is None:
                 continue
+            heading = diagram.title or heading
             blocks.extend(
                 [
                     f"### {heading}",
@@ -101,6 +104,24 @@ class DiagramService:
         lines = ["graph LR"]
         nodes: list[dict[str, Any]] = []
         edges: list[dict[str, Any]] = []
+        if not transactions and self._is_address_scope_boundary(evidence):
+            boundary = self._address_boundary(evidence)
+            self._add_node(lines, nodes, "address", "Address seed")
+            self._add_node(lines, nodes, "capability", "RPC capability checked")
+            self._add_node(lines, nodes, "boundary", "No txlist / no receipt scope")
+            self._add_node(lines, nodes, "no_rca", "No attack RCA conclusion")
+            self._add_edge(lines, edges, "address", "capability", "case seed")
+            self._add_edge(lines, edges, "capability", "boundary", boundary.get("explorer_key_source", "missing explorer"))
+            self._add_edge(lines, edges, "boundary", "no_rca", "partial confidence")
+            return {
+                "diagram_type": "attack_flow",
+                "title": "地址线索处理图",
+                "mermaid_source": "\n".join(lines),
+                "nodes_edges": {"nodes": nodes, "edges": edges},
+                "evidence_ids": [item.id for item in evidence[:20]],
+                "confidence": "partial",
+                "source_type": "evidence_boundary",
+            }
         attack_steps = self._extract_attack_steps(evidence)
         evidence_label = self._edge_label(evidence[:4])
         self._add_node(lines, nodes, "seed", "Seed / 入口")
@@ -175,7 +196,10 @@ class DiagramService:
                 self._add_edge(lines, edges, source, target, self._short(label, 48))
         else:
             self._add_node(lines, nodes, "missing", "暂无链上资金流 evidence")
-        confidence = "high" if flows else self._diagram_confidence(evidence, transactions)
+            if self._is_address_scope_boundary(evidence):
+                self._add_node(lines, nodes, "address", "Address seed")
+                self._add_edge(lines, edges, "address", "missing", "no txlist")
+        confidence = "high" if flows else ("partial" if self._is_address_scope_boundary(evidence) else self._diagram_confidence(evidence, transactions))
         return {
             "diagram_type": "fund_flow",
             "title": "资金流图",
@@ -230,7 +254,7 @@ class DiagramService:
                 self._add_edge(lines, edges, claim_node, report_node, "supports report")
         if not evidence:
             self._add_node(lines, nodes, "empty", "暂无 evidence")
-        confidence = self._diagram_confidence(evidence, [])
+        confidence = "partial" if self._is_address_scope_boundary(evidence) else self._diagram_confidence(evidence, [])
         return {
             "diagram_type": "evidence_map",
             "title": "证据图",
@@ -275,6 +299,13 @@ class DiagramService:
                     }
                 )
         return flows
+
+    def _is_address_scope_boundary(self, evidence: list) -> bool:
+        return any(item.claim_key == "address_discovery_explorer_missing" for item in evidence)
+
+    def _address_boundary(self, evidence: list) -> dict[str, Any]:
+        item = next((row for row in evidence if row.claim_key == "address_discovery_explorer_missing"), None)
+        return item.decoded if item and isinstance(item.decoded, dict) else {}
 
     def _extract_attack_steps(self, evidence: list) -> list[dict[str, Any]]:
         steps: list[dict[str, Any]] = []
