@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Iterator
 
 from sqlalchemy.orm import Session
@@ -8,17 +9,23 @@ from sqlalchemy import select
 
 from app.models.db import JobRun, utcnow
 
+current_workflow_run_id: ContextVar[str | None] = ContextVar("current_workflow_run_id", default=None)
+
 
 class JobService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
     def start(self, case_id: str, job_name: str, input_payload: dict | None = None) -> JobRun:
+        payload = input_payload or {}
+        workflow_run_id = current_workflow_run_id.get()
+        if workflow_run_id:
+            payload = {**payload, "workflow_run_id": workflow_run_id}
         job = JobRun(
             case_id=case_id,
             job_name=job_name,
             status="running",
-            input=input_payload or {},
+            input=payload,
             started_at=utcnow(),
         )
         self.db.add(job)

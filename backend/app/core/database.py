@@ -50,6 +50,8 @@ def ensure_runtime_indexes() -> None:
         "CREATE INDEX IF NOT EXISTS idx_evidence_case_created ON evidence (case_id, created_at)",
         "CREATE INDEX IF NOT EXISTS idx_reports_case_version ON reports (case_id, version)",
         "CREATE INDEX IF NOT EXISTS idx_job_runs_case_created ON job_runs (case_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_workflow_runs_case_created ON workflow_runs (case_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs (status)",
     ]
     with engine.begin() as connection:
         for statement in statements:

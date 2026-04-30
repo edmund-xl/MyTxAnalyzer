@@ -150,6 +150,20 @@ export type JobRun = {
   created_at: string;
 };
 
+export type WorkflowRun = {
+  id: string;
+  case_id: string;
+  workflow_id: string;
+  mode: string;
+  status: string;
+  started_at: string | null;
+  ended_at: string | null;
+  metadata?: Record<string, unknown>;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8100/api";
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}, role: Role = "admin"): Promise<T> {

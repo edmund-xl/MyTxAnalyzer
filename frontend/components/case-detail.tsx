@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Download, FileText, Play, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
-import { API_BASE, apiFetch, CaseDetailSummary, CaseRecord, DiagramSpec, Evidence, Finding, JobRun, Report, ReportExport, Role, TimelineItem } from "@/lib/api";
+import { API_BASE, apiFetch, CaseDetailSummary, CaseRecord, DiagramSpec, Evidence, Finding, JobRun, Report, ReportExport, Role, TimelineItem, WorkflowRun } from "@/lib/api";
 import { JsonInspector } from "@/components/json-inspector";
 import { ReportPreview } from "@/components/report-preview";
 import { Shell, ShellCaseTab } from "@/components/shell";
@@ -13,6 +13,8 @@ import { StatusBadge } from "@/components/status-badge";
 export type CaseTab = "overview" | "diagrams" | "evidence" | "findings" | "reports" | "jobs";
 type ShellTab = Extract<CaseTab, ShellCaseTab>;
 const caseTabs: CaseTab[] = ["overview", "diagrams", "evidence", "findings", "reports", "jobs"];
+const PAGE_SIZE = 50;
+const REPORT_PAGE_SIZE = 20;
 const tabLabels: Record<CaseTab, string> = {
   overview: "Overview",
   diagrams: "Diagrams",
@@ -27,6 +29,11 @@ export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string
   const [tab, setTab] = useState<CaseTab>(initialTab);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [timelineOffset, setTimelineOffset] = useState(0);
+  const [evidenceOffset, setEvidenceOffset] = useState(0);
+  const [findingsOffset, setFindingsOffset] = useState(0);
+  const [reportsOffset, setReportsOffset] = useState(0);
+  const [jobsOffset, setJobsOffset] = useState(0);
   const queryClient = useQueryClient();
   const showDiagrams = tab === "diagrams";
   const showEvidence = tab === "evidence";
@@ -36,9 +43,9 @@ export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string
   const caseQuery = useQuery({ queryKey: ["case", caseId, role], queryFn: () => apiFetch<CaseRecord>(`/cases/${caseId}`, {}, role) });
   const detailSummary = useQuery({ queryKey: ["case-summary", caseId, role], queryFn: () => apiFetch<CaseDetailSummary>(`/cases/${caseId}/summary`, {}, role) });
   const timeline = useQuery({
-    queryKey: ["timeline", caseId, role],
+    queryKey: ["timeline", caseId, role, timelineOffset],
     enabled: showDiagrams,
-    queryFn: () => apiFetch<TimelineItem[]>(`/cases/${caseId}/timeline?limit=100&offset=0`, {}, role)
+    queryFn: () => apiFetch<TimelineItem[]>(`/cases/${caseId}/timeline?limit=${PAGE_SIZE}&offset=${timelineOffset}`, {}, role)
   });
   const diagrams = useQuery({
     queryKey: ["diagrams", caseId, role],
@@ -46,24 +53,29 @@ export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string
     queryFn: () => apiFetch<DiagramSpec[]>(`/cases/${caseId}/diagrams`, {}, role)
   });
   const evidence = useQuery({
-    queryKey: ["evidence", caseId, role],
+    queryKey: ["evidence", caseId, role, evidenceOffset],
     enabled: showEvidence,
-    queryFn: () => apiFetch<Evidence[]>(`/cases/${caseId}/evidence?limit=100&offset=0`, {}, role)
+    queryFn: () => apiFetch<Evidence[]>(`/cases/${caseId}/evidence?limit=${PAGE_SIZE}&offset=${evidenceOffset}`, {}, role)
   });
   const findings = useQuery({
-    queryKey: ["findings", caseId, role],
+    queryKey: ["findings", caseId, role, findingsOffset],
     enabled: showFindings,
-    queryFn: () => apiFetch<Finding[]>(`/cases/${caseId}/findings?limit=100&offset=0`, {}, role)
+    queryFn: () => apiFetch<Finding[]>(`/cases/${caseId}/findings?limit=${PAGE_SIZE}&offset=${findingsOffset}`, {}, role)
   });
   const reports = useQuery({
-    queryKey: ["reports", caseId, role],
+    queryKey: ["reports", caseId, role, reportsOffset],
     enabled: showReports,
-    queryFn: () => apiFetch<Report[]>(`/cases/${caseId}/reports?limit=20&offset=0`, {}, role)
+    queryFn: () => apiFetch<Report[]>(`/cases/${caseId}/reports?limit=${REPORT_PAGE_SIZE}&offset=${reportsOffset}`, {}, role)
   });
   const jobs = useQuery({
-    queryKey: ["jobs", caseId, role],
+    queryKey: ["jobs", caseId, role, jobsOffset],
     enabled: showJobs,
-    queryFn: () => apiFetch<JobRun[]>(`/cases/${caseId}/jobs?limit=100&offset=0`, {}, role)
+    queryFn: () => apiFetch<JobRun[]>(`/cases/${caseId}/jobs?limit=${PAGE_SIZE}&offset=${jobsOffset}`, {}, role)
+  });
+  const workflowRuns = useQuery({
+    queryKey: ["workflow-runs", caseId, role, jobsOffset],
+    enabled: showJobs,
+    queryFn: () => apiFetch<WorkflowRun[]>(`/cases/${caseId}/workflow-runs?limit=${PAGE_SIZE}&offset=${jobsOffset}`, {}, role)
   });
   const runCase = useMutation({
     mutationFn: () => apiFetch(`/cases/${caseId}/run`, { method: "POST" }, role),
@@ -136,7 +148,7 @@ export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string
         }
       }
       if (showJobs) {
-        refreshes.push(jobs.refetch());
+        refreshes.push(jobs.refetch(), workflowRuns.refetch());
       }
       await Promise.all(refreshes);
     } finally {
@@ -223,10 +235,36 @@ export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string
             {tab === "overview" ? (
               <Overview item={item} summary={detailSummary.data} />
             ) : null}
-            {tab === "diagrams" ? <DiagramsPanel diagrams={diagrams.data ?? []} timeline={timeline.data ?? []} loading={diagrams.isLoading || timeline.isLoading} /> : null}
-            {tab === "evidence" ? <EvidencePanel evidence={evidence.data ?? []} selected={selectedEvidence} loading={evidence.isLoading} /> : null}
+            {tab === "diagrams" ? (
+              <DiagramsPanel
+                diagrams={diagrams.data ?? []}
+                timeline={timeline.data ?? []}
+                loading={diagrams.isLoading || timeline.isLoading}
+                timelineOffset={timelineOffset}
+                timelineTotal={detailSummary.data?.transaction_count ?? 0}
+                onTimelinePage={setTimelineOffset}
+              />
+            ) : null}
+            {tab === "evidence" ? (
+              <EvidencePanel
+                evidence={evidence.data ?? []}
+                selected={selectedEvidence}
+                loading={evidence.isLoading}
+                offset={evidenceOffset}
+                total={detailSummary.data?.evidence_count ?? 0}
+                onPage={setEvidenceOffset}
+              />
+            ) : null}
             {tab === "findings" ? (
-              <FindingsPanel findings={findings.data ?? []} loading={findings.isLoading} canReview={canReview} onReview={(findingId, status) => reviewFinding.mutate({ findingId, status })} />
+              <FindingsPanel
+                findings={findings.data ?? []}
+                loading={findings.isLoading}
+                canReview={canReview}
+                onReview={(findingId, status) => reviewFinding.mutate({ findingId, status })}
+                offset={findingsOffset}
+                total={detailSummary.data?.finding_count ?? 0}
+                onPage={setFindingsOffset}
+              />
             ) : null}
             {tab === "reports" ? (
               <ReportsPanel
@@ -238,9 +276,21 @@ export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string
                 onCreatePdf={() => createPdf.mutate()}
                 onDownload={downloadExport}
                 pdfPending={createPdf.isPending || Boolean(reportExports.data?.some((item) => item.status === "pending" || item.status === "running"))}
+                offset={reportsOffset}
+                total={detailSummary.data?.report_count ?? 0}
+                onPage={setReportsOffset}
               />
             ) : null}
-            {tab === "jobs" ? <JobsPanel jobs={jobs.data ?? []} loading={jobs.isLoading} /> : null}
+            {tab === "jobs" ? (
+              <JobsPanel
+                jobs={jobs.data ?? []}
+                workflowRuns={workflowRuns.data ?? []}
+                loading={jobs.isLoading || workflowRuns.isLoading}
+                offset={jobsOffset}
+                total={detailSummary.data?.job_count ?? 0}
+                onPage={setJobsOffset}
+              />
+            ) : null}
           </div>
         </div>
       </div>
@@ -300,7 +350,21 @@ function Overview({ item, summary }: { item?: CaseRecord; summary?: CaseDetailSu
   );
 }
 
-function DiagramsPanel({ diagrams, timeline, loading }: { diagrams: DiagramSpec[]; timeline: TimelineItem[]; loading: boolean }) {
+function DiagramsPanel({
+  diagrams,
+  timeline,
+  loading,
+  timelineOffset,
+  timelineTotal,
+  onTimelinePage
+}: {
+  diagrams: DiagramSpec[];
+  timeline: TimelineItem[];
+  loading: boolean;
+  timelineOffset: number;
+  timelineTotal: number;
+  onTimelinePage: (offset: number) => void;
+}) {
   if (loading) {
     return <LoadingMetric label="Diagrams" />;
   }
@@ -314,6 +378,7 @@ function DiagramsPanel({ diagrams, timeline, loading }: { diagrams: DiagramSpec[
           <div>No diagrams</div>
         </div>
         <TimelineTable timeline={timeline} />
+        <Pager offset={timelineOffset} total={timelineTotal} pageSize={PAGE_SIZE} onPage={onTimelinePage} />
       </div>
     );
   }
@@ -325,7 +390,12 @@ function DiagramsPanel({ diagrams, timeline, loading }: { diagrams: DiagramSpec[
           content={`## ${diagram.title}\n\n- Confidence: \`${diagram.confidence}\`\n- Evidence: \`${diagram.evidence_ids.length}\`\n\n\`\`\`mermaid\n${diagram.mermaid_source}\n\`\`\``}
         />
       ))}
-      {timeline.length > 1 ? <TimelineTable timeline={timeline} /> : null}
+      {timeline.length > 1 ? (
+        <>
+          <TimelineTable timeline={timeline} />
+          <Pager offset={timelineOffset} total={timelineTotal} pageSize={PAGE_SIZE} onPage={onTimelinePage} />
+        </>
+      ) : null}
     </div>
   );
 }
@@ -361,93 +431,129 @@ function TimelineTable({ timeline }: { timeline: TimelineItem[] }) {
   );
 }
 
-function EvidencePanel({ evidence, selected, loading }: { evidence: Evidence[]; selected?: Evidence; loading: boolean }) {
+function EvidencePanel({
+  evidence,
+  selected,
+  loading,
+  offset,
+  total,
+  onPage
+}: {
+  evidence: Evidence[];
+  selected?: Evidence;
+  loading: boolean;
+  offset: number;
+  total: number;
+  onPage: (offset: number) => void;
+}) {
   if (loading) {
     return <LoadingMetric label="Evidence" />;
   }
   return (
-    <div className="grid-2">
+    <div className="form-grid">
+      <div className="grid-2">
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Claim</th>
+                <th>Producer</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {evidence.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.source_type}</td>
+                  <td>{item.claim_key}</td>
+                  <td>{item.producer}</td>
+                  <td>
+                    <StatusBadge value={item.confidence} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <JsonInspector value={selected ?? {}} />
+      </div>
+      <Pager offset={offset} total={total} pageSize={PAGE_SIZE} onPage={onPage} />
+    </div>
+  );
+}
+
+function FindingsPanel({
+  findings,
+  loading,
+  canReview,
+  onReview,
+  offset,
+  total,
+  onPage
+}: {
+  findings: Finding[];
+  loading: boolean;
+  canReview: boolean;
+  onReview: (findingId: string, status: string) => void;
+  offset: number;
+  total: number;
+  onPage: (offset: number) => void;
+}) {
+  if (loading) {
+    return <LoadingMetric label="Findings" />;
+  }
+  return (
+    <div className="form-grid">
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Type</th>
-              <th>Claim</th>
-              <th>Producer</th>
+              <th>Finding</th>
+              <th>Severity</th>
               <th>Confidence</th>
+              <th>Evidence</th>
+              <th>Review</th>
+              <th>Review Decision</th>
             </tr>
           </thead>
           <tbody>
-            {evidence.map((item) => (
+            {findings.map((item) => (
               <tr key={item.id}>
-                <td>{item.source_type}</td>
-                <td>{item.claim_key}</td>
-                <td>{item.producer}</td>
+                <td>
+                  <strong>{item.title}</strong>
+                  <div>{item.claim}</div>
+                </td>
+                <td>
+                  <StatusBadge value={item.severity} />
+                </td>
                 <td>
                   <StatusBadge value={item.confidence} />
+                </td>
+                <td>{item.evidence_ids.length}</td>
+                <td>
+                  <StatusBadge value={item.reviewer_status} />
+                </td>
+                <td>
+                  {canReview ? (
+                    <div className="button-row">
+                      <button className="btn" disabled={item.reviewer_status === "approved"} onClick={() => onReview(item.id, "approved")}>
+                        <Check size={16} /> Approve
+                      </button>
+                      <button className="btn danger" disabled={item.reviewer_status === "rejected"} onClick={() => onReview(item.id, "rejected")}>
+                        <X size={16} /> Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <StatusBadge value="reviewer_only" />
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <JsonInspector value={selected ?? {}} />
-    </div>
-  );
-}
-
-function FindingsPanel({ findings, loading, canReview, onReview }: { findings: Finding[]; loading: boolean; canReview: boolean; onReview: (findingId: string, status: string) => void }) {
-  if (loading) {
-    return <LoadingMetric label="Findings" />;
-  }
-  return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Finding</th>
-            <th>Severity</th>
-            <th>Confidence</th>
-            <th>Evidence</th>
-            <th>Review</th>
-            <th>Review Decision</th>
-          </tr>
-        </thead>
-        <tbody>
-          {findings.map((item) => (
-            <tr key={item.id}>
-              <td>
-                <strong>{item.title}</strong>
-                <div>{item.claim}</div>
-              </td>
-              <td>
-                <StatusBadge value={item.severity} />
-              </td>
-              <td>
-                <StatusBadge value={item.confidence} />
-              </td>
-              <td>{item.evidence_ids.length}</td>
-              <td>
-                <StatusBadge value={item.reviewer_status} />
-              </td>
-              <td>
-                {canReview ? (
-                  <div className="button-row">
-                    <button className="btn" disabled={item.reviewer_status === "approved"} onClick={() => onReview(item.id, "approved")}>
-                      <Check size={16} /> Approve
-                    </button>
-                    <button className="btn danger" disabled={item.reviewer_status === "rejected"} onClick={() => onReview(item.id, "rejected")}>
-                      <X size={16} /> Reject
-                    </button>
-                  </div>
-                ) : (
-                  <StatusBadge value="reviewer_only" />
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <Pager offset={offset} total={total} pageSize={PAGE_SIZE} onPage={onPage} />
     </div>
   );
 }
@@ -460,7 +566,10 @@ function ReportsPanel({
   exportError,
   onCreatePdf,
   onDownload,
-  pdfPending
+  pdfPending,
+  offset,
+  total,
+  onPage
 }: {
   reports: Report[];
   detail?: Report;
@@ -470,6 +579,9 @@ function ReportsPanel({
   onCreatePdf: () => void;
   onDownload: (exportId: string) => void;
   pdfPending: boolean;
+  offset: number;
+  total: number;
+  onPage: (offset: number) => void;
 }) {
   const pdf = exports.find((item) => item.format === "pdf");
   if (loading) {
@@ -513,40 +625,107 @@ function ReportsPanel({
             </tbody>
           </table>
         </div>
+        <Pager offset={offset} total={total} pageSize={REPORT_PAGE_SIZE} onPage={onPage} />
       </div>
       {typeof detail?.content === "string" ? <ReportPreview content={detail.content} /> : <div className="markdown">{JSON.stringify(detail?.content ?? {}, null, 2)}</div>}
     </div>
   );
 }
 
-function JobsPanel({ jobs, loading }: { jobs: JobRun[]; loading: boolean }) {
+function JobsPanel({
+  jobs,
+  workflowRuns,
+  loading,
+  offset,
+  total,
+  onPage
+}: {
+  jobs: JobRun[];
+  workflowRuns: WorkflowRun[];
+  loading: boolean;
+  offset: number;
+  total: number;
+  onPage: (offset: number) => void;
+}) {
   if (loading) {
     return <LoadingMetric label="Jobs" />;
   }
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Job</th>
-            <th>Status</th>
-            <th>Started</th>
-            <th>Error</th>
-          </tr>
-        </thead>
-        <tbody>
-          {jobs.map((item) => (
-            <tr key={item.id}>
-              <td>{item.job_name}</td>
-              <td>
-                <StatusBadge value={item.status} />
-              </td>
-              <td>{item.started_at || item.created_at}</td>
-              <td>{item.error || "-"}</td>
+    <div className="form-grid">
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Workflow</th>
+              <th>Mode</th>
+              <th>Status</th>
+              <th>Started</th>
+              <th>Error</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {workflowRuns.map((item) => (
+              <tr key={item.id}>
+                <td className="mono">{item.workflow_id}</td>
+                <td>{item.mode}</td>
+                <td>
+                  <StatusBadge value={item.status} />
+                </td>
+                <td>{item.started_at || item.created_at}</td>
+                <td>{item.error || "-"}</td>
+              </tr>
+            ))}
+            {!workflowRuns.length ? (
+              <tr>
+                <td colSpan={5}>No workflow runs</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Job</th>
+              <th>Status</th>
+              <th>Started</th>
+              <th>Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {jobs.map((item) => (
+              <tr key={item.id}>
+                <td>{item.job_name}</td>
+                <td>
+                  <StatusBadge value={item.status} />
+                </td>
+                <td>{item.started_at || item.created_at}</td>
+                <td>{item.error || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pager offset={offset} total={total} pageSize={PAGE_SIZE} onPage={onPage} />
+    </div>
+  );
+}
+
+function Pager({ offset, total, pageSize, onPage }: { offset: number; total: number; pageSize: number; onPage: (offset: number) => void }) {
+  const from = total === 0 ? 0 : offset + 1;
+  const to = Math.min(offset + pageSize, total);
+  return (
+    <div className="button-row">
+      <button className="btn" disabled={offset <= 0} onClick={() => onPage(Math.max(0, offset - pageSize))}>
+        Previous
+      </button>
+      <span className="mono">
+        {from}-{to} / {total}
+      </span>
+      <button className="btn" disabled={offset + pageSize >= total} onClick={() => onPage(offset + pageSize)}>
+        Next
+      </button>
     </div>
   );
 }

@@ -33,16 +33,17 @@ const seedTypeOptions: Array<{ value: CaseForm["seed_type"]; label: string }> = 
   { value: "address", label: "地址" },
   { value: "alert", label: "外部事件链接" }
 ];
+const CASE_PAGE_SIZE = 50;
 
 export function Dashboard() {
   const [role, setRole] = useState<Role>("admin");
   const [form, setForm] = useState<CaseForm>(emptyForm);
-  const [caseLimit, setCaseLimit] = useState(50);
+  const [caseOffset, setCaseOffset] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const queryClient = useQueryClient();
   const networks = useQuery({ queryKey: ["networks", role], queryFn: () => apiFetch<Network[]>("/networks", {}, role) });
   const summary = useQuery({ queryKey: ["cases-summary", role], queryFn: () => apiFetch<CaseSummary>("/cases/summary", {}, role) });
-  const cases = useQuery({ queryKey: ["cases", role, caseLimit], queryFn: () => apiFetch<CaseRecord[]>(`/cases?limit=${caseLimit}&offset=0`, {}, role) });
+  const cases = useQuery({ queryKey: ["cases", role, caseOffset], queryFn: () => apiFetch<CaseRecord[]>(`/cases?limit=${CASE_PAGE_SIZE}&offset=${caseOffset}`, {}, role) });
   const networkRows = networks.data ?? [];
   const caseRows = cases.data ?? [];
   const selectedNetwork = networkRows.find((network) => network.key === form.network_key);
@@ -66,6 +67,7 @@ export function Dashboard() {
       ),
     onSuccess: () => {
       setForm(emptyForm);
+      setCaseOffset(0);
       queryClient.invalidateQueries({ queryKey: ["cases", role] });
       queryClient.invalidateQueries({ queryKey: ["cases-summary", role] });
     }
@@ -225,11 +227,19 @@ export function Dashboard() {
                 </tbody>
               </table>
             </div>
-            {caseRows.length < totalCases ? (
+            {totalCases > CASE_PAGE_SIZE ? (
               <div className="band-body">
-                <button className="btn" onClick={() => setCaseLimit((value) => value + 50)}>
-                  Load more ({caseRows.length}/{totalCases})
-                </button>
+                <div className="button-row">
+                  <button className="btn" disabled={caseOffset <= 0} onClick={() => setCaseOffset((value) => Math.max(0, value - CASE_PAGE_SIZE))}>
+                    Previous
+                  </button>
+                  <span className="mono">
+                    {totalCases === 0 ? 0 : caseOffset + 1}-{Math.min(caseOffset + CASE_PAGE_SIZE, totalCases)} / {totalCases}
+                  </span>
+                  <button className="btn" disabled={caseOffset + CASE_PAGE_SIZE >= totalCases} onClick={() => setCaseOffset((value) => value + CASE_PAGE_SIZE)}>
+                    Next
+                  </button>
+                </div>
               </div>
             ) : null}
           </div>

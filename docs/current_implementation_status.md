@@ -2,7 +2,7 @@
 
 ## 中文
 
-快照日期：2026-04-29
+快照日期：2026-04-30
 
 本文记录 RCA Workbench 当前本地实现状态。原始规格包保留在 `docs/spec/onchain_rca_workbench_spec_v1/`，作为实现基准。
 
@@ -20,14 +20,19 @@ RCA Workbench 与 MegaETH Pentest Workbench 已明确隔离：
 ### 后端已实现范围
 
 - FastAPI API 已覆盖 networks、cases、transactions、timeline、evidence、findings review、reports、diagrams、report exports、jobs、health。
-- SQLAlchemy models 已覆盖核心 RCA 实体，并新增 `diagram_specs` 和 `report_exports`。
+- SQLAlchemy models 已覆盖核心 RCA 实体，并新增 `diagram_specs`、`report_exports` 和 `workflow_runs`。
 - 已为 case list、transaction timeline、evidence、reports、jobs、diagrams、report exports 增加运行时索引。
+- Provider 解析采用自带密钥优先、公共 RPC fallback：RPC / Explorer key 来源会进入 environment capability matrix。
+- EVM receipt parser 已标准化 Transfer、Approval、fund-flow edge 和 attack step；Sui 仍使用 Sui JSON-RPC 的 events/balanceChanges。
+- FundFlow worker 读取标准化 `fund_flow_edges`，资金流图按同源地址聚合并在边上标注 amount、asset、tx/evidence 和 confidence。
+- LossCalculator worker 已支持稳定币直接估值；缺少价格源时只写 evidence boundary，不伪造 USD 结论。
 - Case summary endpoint：
   - `GET /api/cases/summary`
   - `GET /api/cases/{case_id}/summary`
 - TxAnalyzer adapter 调用真实 CLI 路径：`scripts/pull_artifacts.py --network <NET> --tx <TX>`。
 - TxAnalyzer artifact 按 network + transaction hash 缓存，避免同一交易重复拉取。
 - Sui 交易发现使用 Sui JSON-RPC，不走 TxAnalyzer，因为 TxAnalyzer 只适用于 EVM。
+- Inline workflow 会创建 `workflow_runs` 并把 job_runs 通过 input 中的 `workflow_run_id` 关联；Temporal mode 已拆成 step activity。
 - High/Critical finding 仍强制绑定 deterministic evidence。
 
 ### 前端已实现范围
@@ -39,6 +44,8 @@ RCA Workbench 与 MegaETH Pentest Workbench 已明确隔离：
   - Diagrams 只在打开时加载 diagrams/timeline。
   - Evidence、Findings、Reports、Jobs 只在打开对应 tab 时加载。
 - Refresh 只刷新当前 tab 需要的数据，以及 case metadata/summary。
+- Dashboard case list、Evidence、Findings、Reports、Jobs 和 Timeline 已分页加载，不再随历史数据线性扩大首屏 payload。
+- Jobs tab 同时展示 workflow run 和 worker job run，便于定位一次 run 的失败位置。
 - Reports tab 支持 Markdown preview、Mermaid 渲染、PDF export status 和 PDF download。
 - Findings review action 第一版只保留 approve/reject，并限制 reviewer/admin 角色使用。
 
@@ -62,6 +69,17 @@ Diagram specs 已持久化，并由页面预览和 PDF 导出共用：
 - `attack_flow`
 - `fund_flow`
 - `evidence_map`
+
+报告引擎已加入 attack-type renderer registry，用于把不同事件归到可复用 renderer family：
+
+- `amm_rounding_liquidity`
+- `collateral_solvency_bypass`
+- `cross_contract_reentrancy`
+- `oracle_price_manipulation`
+- `access_control_or_forwarder`
+- `reward_accounting`
+- `bridge_message_verification`
+- `generic_fallback`
 
 PDF export 是 report 的派生 artifact：
 
@@ -131,18 +149,25 @@ lsof -nP -iTCP:3100 -sTCP:LISTEN
 lsof -nP -iTCP:8100 -sTCP:LISTEN
 ```
 
+性能数据 smoke：
+
+```bash
+DATABASE_URL="sqlite+pysqlite:///./perf_rca_workbench.db" \
+  ./backend/.venv/bin/python scripts/seed_performance_data.py --reset-generated
+```
+
 ### 已知缺口
 
 - 完整 Docker Compose 验证仍需要本机先安装 Docker Desktop。
 - 公共 RPC 适合 smoke test，但不适合高强度 trace/debug/archive workload。
 - Explorer API enrichment 依赖用户提供 API key，不能提交到仓库。
-- 大数据量 UI 性能已通过 API limit 和 tab 懒加载改善；更深层的 infinite scroll/virtualized table 仍是后续任务。
-- Temporal mode 已有 scaffold，本地开发目前使用 inline workflow。
+- 大数据量 UI 性能已通过 API limit、分页和 tab 懒加载改善；更深层的 virtualized table 仍是后续任务。
+- Temporal mode 已拆成 step activity；完整 Docker/Temporal smoke 仍依赖 Docker Desktop。
 - PDF 生成依赖 Playwright/Chromium；不可用时后端会记录 fallback PDF renderer warning。
 
 ## English
 
-Snapshot date: 2026-04-29
+Snapshot date: 2026-04-30
 
 This document records the current local implementation state of the RCA Workbench. The original source specification remains under `docs/spec/onchain_rca_workbench_spec_v1/` as the implementation baseline.
 
@@ -160,14 +185,19 @@ The RCA Workbench is separated from the MegaETH Pentest Workbench:
 ### Implemented Backend Scope
 
 - FastAPI API covers networks, cases, transactions, timeline, evidence, findings review, reports, diagrams, report exports, jobs, and health.
-- SQLAlchemy models cover the core RCA entities plus `diagram_specs` and `report_exports`.
+- SQLAlchemy models cover the core RCA entities plus `diagram_specs`, `report_exports`, and `workflow_runs`.
 - Runtime indexes exist for case lists, transaction timelines, evidence, reports, jobs, diagrams, and report exports.
+- Provider resolution uses bring-your-own keys first and public RPC fallback. RPC / Explorer key sources are recorded in the environment capability matrix.
+- The EVM receipt parser normalizes Transfer, Approval, fund-flow edges, and attack steps. Sui continues to use Sui JSON-RPC events/balanceChanges.
+- The FundFlow worker consumes standardized `fund_flow_edges`; fund-flow diagrams aggregate by common source address and label each edge with amount, asset, tx/evidence, and confidence.
+- The LossCalculator worker supports direct stablecoin valuation. When a price source is missing, it records an evidence boundary instead of fabricating USD loss.
 - Case summary endpoints:
   - `GET /api/cases/summary`
   - `GET /api/cases/{case_id}/summary`
 - The TxAnalyzer adapter invokes the real CLI path: `scripts/pull_artifacts.py --network <NET> --tx <TX>`.
 - TxAnalyzer artifacts are cached by network and transaction hash to avoid repeated pulls for the same transaction.
 - Sui transaction discovery uses Sui JSON-RPC and does not route through TxAnalyzer because TxAnalyzer is EVM-specific.
+- Inline workflow creates `workflow_runs` and links job_runs through `workflow_run_id` in job input. Temporal mode is now split into step activities.
 - High and critical findings still require deterministic evidence.
 
 ### Implemented Frontend Scope
@@ -179,6 +209,8 @@ The RCA Workbench is separated from the MegaETH Pentest Workbench:
   - Diagrams loads diagrams/timeline only when opened.
   - Evidence, Findings, Reports, and Jobs load only when their tabs are opened.
 - Refresh reloads only the current tab plus case metadata/summary.
+- Dashboard case list, Evidence, Findings, Reports, Jobs, and Timeline are paginated so first-page payload does not grow linearly with history.
+- The Jobs tab shows both workflow runs and worker job runs to locate the failed step in a specific run.
 - Reports tab supports Markdown preview, Mermaid rendering, PDF export status, and PDF download.
 - Findings review actions are intentionally limited to approve/reject for reviewer/admin roles in the first version.
 
@@ -202,6 +234,17 @@ Diagram specs are persisted and reused by report preview and PDF export:
 - `attack_flow`
 - `fund_flow`
 - `evidence_map`
+
+The report engine now includes an attack-type renderer registry:
+
+- `amm_rounding_liquidity`
+- `collateral_solvency_bypass`
+- `cross_contract_reentrancy`
+- `oracle_price_manipulation`
+- `access_control_or_forwarder`
+- `reward_accounting`
+- `bridge_message_verification`
+- `generic_fallback`
 
 PDF export is a derived report artifact:
 
@@ -271,11 +314,18 @@ lsof -nP -iTCP:3100 -sTCP:LISTEN
 lsof -nP -iTCP:8100 -sTCP:LISTEN
 ```
 
+Performance data smoke:
+
+```bash
+DATABASE_URL="sqlite+pysqlite:///./perf_rca_workbench.db" \
+  ./backend/.venv/bin/python scripts/seed_performance_data.py --reset-generated
+```
+
 ### Known Gaps
 
 - Full Docker Compose validation still requires installing Docker Desktop locally.
 - Public RPC endpoints are suitable for smoke tests but not reliable enough for heavy trace/debug/archive workloads.
 - Explorer API enrichment depends on user-provided API keys and must not be committed.
-- Large-data UI performance has improved through API limits and tab lazy loading; deeper infinite scroll/virtualized tables remain future work.
-- Temporal mode is scaffolded, while local development currently uses inline workflow execution.
+- Large-data UI performance has improved through API limits, pagination, and tab lazy loading; deeper virtualized tables remain future work.
+- Temporal mode is split into step activities; full Docker/Temporal smoke still depends on Docker Desktop.
 - PDF generation depends on Playwright/Chromium availability. When unavailable, the backend records a fallback PDF renderer warning.

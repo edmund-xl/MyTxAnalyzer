@@ -10,6 +10,7 @@
 - `frontend/`：Next.js 分析/复核工作台。
 - `docs/spec/onchain_rca_workbench_spec_v1/`：原始规格包，作为实现基准保留。
 - `docs/engineering_delivery_standard.md`：工程交付与文档规范。
+- `docs/analyst_operations_guide.md`：分析师操作、RPC/Explorer key、PDF 和排障手册。
 - `docs/repository_publish.md`：GitHub 仓库发布和端口/目录防误操作说明。
 - `docs/current_implementation_status.md`：当前实现状态、端口、验证命令和已知缺口。
 - `docs/cases/defillama_cases.yaml`：精选 DefiLlama 回归 case 队列。
@@ -59,6 +60,26 @@ pnpm exec tsc --noEmit
 pnpm build
 ```
 
+7-case 回归队列位于 `docs/cases/defillama_cases.yaml`。本地 inline workflow 使用：
+
+```bash
+WORKFLOW_MODE=inline
+```
+
+Docker/生产 Temporal workflow 使用：
+
+```bash
+WORKFLOW_MODE=temporal
+TEMPORAL_ADDRESS=localhost:7233
+```
+
+性能种子 smoke：
+
+```bash
+DATABASE_URL="sqlite+pysqlite:///./perf_rca_workbench.db" \
+  ./backend/.venv/bin/python scripts/seed_performance_data.py --reset-generated
+```
+
 ### 文档交付要求
 
 每次功能、性能、报告质量、运维方式或接口行为发生更新，都必须同步更新对应文档。
@@ -74,6 +95,7 @@ Internal post-incident on-chain attack analysis and report-generation workbench.
 - `frontend/`: Next.js analyst/reviewer workbench.
 - `docs/spec/onchain_rca_workbench_spec_v1/`: source specification package, retained as the implementation baseline.
 - `docs/engineering_delivery_standard.md`: engineering delivery and documentation standard.
+- `docs/analyst_operations_guide.md`: analyst operations, RPC/Explorer key, PDF, and troubleshooting guide.
 - `docs/repository_publish.md`: GitHub repository publishing notes and port/path safety rules.
 - `docs/current_implementation_status.md`: current implementation status, ports, verification commands, and known gaps.
 - `docs/cases/defillama_cases.yaml`: curated DefiLlama regression case queue.
@@ -121,6 +143,26 @@ Frontend checks:
 cd frontend
 pnpm exec tsc --noEmit
 pnpm build
+```
+
+The 7-case regression queue lives at `docs/cases/defillama_cases.yaml`. Local inline workflow uses:
+
+```bash
+WORKFLOW_MODE=inline
+```
+
+Docker/production Temporal workflow uses:
+
+```bash
+WORKFLOW_MODE=temporal
+TEMPORAL_ADDRESS=localhost:7233
+```
+
+Performance seed smoke:
+
+```bash
+DATABASE_URL="sqlite+pysqlite:///./perf_rca_workbench.db" \
+  ./backend/.venv/bin/python scripts/seed_performance_data.py --reset-generated
 ```
 
 ### Documentation Delivery Requirement

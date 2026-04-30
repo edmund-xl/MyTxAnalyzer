@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import json
-import os
-
 import httpx
 from sqlalchemy.orm import Session
 from web3 import Web3
 
-from app.core.public_rpc import apply_network_middlewares, public_network_info, resolve_rpc_url
+from app.core.public_rpc import apply_network_middlewares, public_network_info, resolve_explorer_api_key, resolve_rpc_url
 from app.core.object_store import ObjectStore
 from app.models.schemas import WorkerResult
 from app.services.case_service import CaseService
@@ -37,6 +35,8 @@ class EnvironmentCheckWorker:
             "explorer_ok": False,
             "historical_call_ok": False,
             "rpc_source": "missing",
+            "explorer_key_source": "missing",
+            "capability_matrix": {},
             "public_network_info": public_network_info(case.network_key),
             "degradation_notes": [],
         }
@@ -78,15 +78,26 @@ class EnvironmentCheckWorker:
                     output["trace_target_tx"] = trace_target
                     output["trace_transaction_ok"] = self._rpc_method_ok(w3, "trace_transaction", [trace_target])
                     output["debug_trace_transaction_ok"] = self._rpc_method_ok(w3, "debug_traceTransaction", [trace_target, {}])
+                    output["eth_get_transaction_receipt_ok"] = self._rpc_method_ok(w3, "eth_getTransactionReceipt", [trace_target])
                 output["historical_call_ok"] = bool(network.supports_historical_eth_call)
 
             if getattr(network, "network_type", "evm") == "evm":
-                explorer_key = os.getenv(network.explorer_api_key_secret_ref or "")
+                explorer_key, explorer_key_source = resolve_explorer_api_key(network)
+                output["explorer_key_source"] = explorer_key_source
                 if network.explorer_base_url and explorer_key:
                     output["explorer_ok"] = self._explorer_ok(network.explorer_base_url, explorer_key, network.chain_id)
                 else:
                     output["degradation_notes"].append("Explorer API key or base URL missing")
                     status = "partial"
+
+            output["capability_matrix"] = {
+                "eth_chainId": bool(output.get("chain_id")),
+                "eth_getTransactionReceipt": bool(output.get("eth_get_transaction_receipt_ok") or output.get("network_type") == "sui"),
+                "trace_transaction": bool(output.get("trace_transaction_ok")),
+                "debug_traceTransaction": bool(output.get("debug_trace_transaction_ok")),
+                "explorer_txlist_getsourcecode": bool(output.get("explorer_ok")),
+                "historical_eth_call": bool(output.get("historical_call_ok")),
+            }
 
             artifact_key = f"cases/{case_id}/environment/capability.json"
             artifact_uri = self.object_store.put_bytes(

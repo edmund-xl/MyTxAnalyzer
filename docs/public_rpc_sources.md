@@ -15,6 +15,18 @@
 | Unichain Mainnet | 130 | `https://unichain-rpc.publicnode.com` | - | ETH | `https://uniscan.xyz` | PublicNode endpoint 支持基础 JSON-RPC。 |
 | Taiko Mainnet | 167000 | `https://taiko-rpc.publicnode.com` | `https://rpc.mainnet.taiko.xyz` | ETH | `https://taikoscan.io` | 公共 RPC 可用于 seed 验证；trace/debug 建议使用专用 provider。 |
 | MegaETH Mainnet | 4326 | `https://mainnet.megaeth.com/rpc` | - | ETH | MegaETH block explorer | 官方公共 RPC 支持基础 Ethereum JSON-RPC；trace/debug 可用性有限。 |
+| Sui Mainnet | N/A | `https://fullnode.mainnet.sui.io:443` | - | SUI | `https://suiexplorer.com` | 非 EVM；使用 `sui_getTransactionBlock`、events 和 balanceChanges，TxAnalyzer 不适用。 |
+
+### Provider 解析顺序
+
+运行时优先读取用户自带密钥，不把密钥写入数据库：
+
+1. 网络配置里的 `rpc_url_secret_ref`，例如 `ETH_RPC_URL`、`BASE_RPC_URL`、`SUI_RPC_URL`。
+2. 网络专用 Explorer key，例如 `ETH_EXPLORER_API_KEY`、`BASE_EXPLORER_API_KEY`。
+3. 通用 `ETHERSCAN_API_KEY`。
+4. 公共 RPC fallback。
+
+EnvironmentCheck 会记录 capability matrix：`eth_chainId`、`eth_getTransactionReceipt`、`trace_transaction`、`debug_traceTransaction`、Explorer `txlist/getsourcecode`、historical `eth_call`。公共 fallback 缺少 trace/debug 时属于降级，不应让全案失败。
 
 ### 本地验证
 
@@ -57,6 +69,18 @@ These endpoints are non-secret defaults for local smoke tests. They are usually 
 | Unichain Mainnet | 130 | `https://unichain-rpc.publicnode.com` | - | ETH | `https://uniscan.xyz` | PublicNode endpoint supports baseline JSON-RPC. |
 | Taiko Mainnet | 167000 | `https://taiko-rpc.publicnode.com` | `https://rpc.mainnet.taiko.xyz` | ETH | `https://taikoscan.io` | Public RPC supports seed validation; dedicated provider recommended for trace/debug. |
 | MegaETH Mainnet | 4326 | `https://mainnet.megaeth.com/rpc` | - | ETH | MegaETH block explorer | Official public RPC supports baseline Ethereum JSON-RPC; trace/debug availability is limited. |
+| Sui Mainnet | N/A | `https://fullnode.mainnet.sui.io:443` | - | SUI | `https://suiexplorer.com` | Non-EVM; uses `sui_getTransactionBlock`, events, and balanceChanges. TxAnalyzer does not apply. |
+
+### Provider Resolution Order
+
+Runtime resolution prefers bring-your-own keys and does not store secrets in the database:
+
+1. The configured `rpc_url_secret_ref`, for example `ETH_RPC_URL`, `BASE_RPC_URL`, or `SUI_RPC_URL`.
+2. Network-specific Explorer keys, for example `ETH_EXPLORER_API_KEY` or `BASE_EXPLORER_API_KEY`.
+3. Generic `ETHERSCAN_API_KEY`.
+4. Public RPC fallback.
+
+EnvironmentCheck records a capability matrix covering `eth_chainId`, `eth_getTransactionReceipt`, `trace_transaction`, `debug_traceTransaction`, Explorer `txlist/getsourcecode`, and historical `eth_call`. Missing trace/debug support on public fallback is a degradation, not a full case failure.
 
 ### Local Validation
 

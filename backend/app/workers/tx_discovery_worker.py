@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -9,12 +8,13 @@ import httpx
 from sqlalchemy.orm import Session
 from web3 import Web3
 
-from app.core.public_rpc import apply_network_middlewares, resolve_rpc_url
+from app.core.public_rpc import apply_network_middlewares, resolve_explorer_api_key, resolve_rpc_url
 from app.core.object_store import ObjectStore
 from app.models.db import Transaction
 from app.models.schemas import TransactionCreate, WorkerResult
 from app.services.case_service import CaseService
 from app.services.evidence_service import EvidenceService
+from app.services.evidence_parser_service import EvidenceParserService
 from app.services.job_service import JobService
 
 
@@ -91,7 +91,7 @@ class TxDiscoveryWorker:
                     confidence="partial",
                 )
                 evidence_ids.append(evidence.id)
-            status = "success" if txs or case.seed_type == "alert" else "failed"
+            status = "success" if txs or case.seed_type == "alert" else ("partial" if case.seed_type == "address" else "failed")
             job_service.finish(job, status, output=discovery)
             return WorkerResult(case_id=case_id, worker_name=self.name, status=status, summary=discovery, artifacts=artifacts, evidence_ids=evidence_ids)
         except Exception as exc:
@@ -121,6 +121,35 @@ class TxDiscoveryWorker:
             self.db.add(tx)
             self.db.commit()
             self.db.refresh(tx)
+            if receipt:
+                receipt_payload = json.loads(Web3.to_json(receipt))
+                normalized = EvidenceParserService().normalize_evm_receipt(receipt_payload, tx.tx_hash)
+                receipt_content = json.dumps(receipt_payload, indent=2, sort_keys=True, default=str).encode("utf-8")
+                receipt_uri = self.object_store.put_bytes(
+                    receipt_content,
+                    f"cases/{case.id}/discovery/evm_receipt_{tx.tx_hash}.json",
+                    "application/json",
+                )
+                EvidenceService(self.db).create_artifact(
+                    case.id,
+                    producer=self.name,
+                    artifact_type="evm_receipt",
+                    object_path=receipt_uri,
+                    content_hash=self.object_store.sha256_bytes(receipt_content),
+                    size_bytes=len(receipt_content),
+                    metadata={"network_key": case.network_key, "tx_hash": tx.tx_hash},
+                    tx_id=tx.id,
+                )
+                EvidenceService(self.db).create_evidence(
+                    case_id=case.id,
+                    tx_id=tx.id,
+                    source_type="receipt_log",
+                    producer=self.name,
+                    claim_key="evm_receipt_events_normalized",
+                    raw_path=receipt_uri,
+                    decoded=normalized,
+                    confidence="high" if normalized.get("status") == 1 else "partial",
+                )
         except Exception:
             return
 
@@ -310,8 +339,23 @@ class TxDiscoveryWorker:
         return f"{int(mist) / 1_000_000_000:.9f}".rstrip("0").rstrip(".")
 
     def _discover_address_txs(self, case) -> list[Transaction]:
-        explorer_key = os.getenv(case.network.explorer_api_key_secret_ref or "")
+        explorer_key, explorer_key_source = resolve_explorer_api_key(case.network)
         if not explorer_key or not case.network.explorer_base_url:
+            EvidenceService(self.db).create_evidence(
+                case_id=case.id,
+                source_type="provider_degradation",
+                producer=self.name,
+                claim_key="address_discovery_explorer_missing",
+                raw_path=None,
+                decoded={
+                    "address": case.seed_value,
+                    "network_key": case.network_key,
+                    "explorer_key_source": explorer_key_source,
+                    "explorer_base_url": case.network.explorer_base_url,
+                    "boundary": "Address seed discovery requires an explorer txlist API key. Public RPC fallback records metadata only and does not fabricate transactions.",
+                },
+                confidence="partial",
+            )
             return []
         response = httpx.get(
             case.network.explorer_base_url,

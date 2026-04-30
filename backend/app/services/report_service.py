@@ -14,6 +14,7 @@ from app.services.case_service import CaseService
 from app.services.diagram_service import DiagramService
 from app.services.evidence_service import EvidenceService
 from app.services.finding_service import FindingService
+from app.services.report_renderer_registry import ReportRendererRegistry
 
 
 REPORT_SECTION_TITLES = [
@@ -54,9 +55,19 @@ class ReportService:
         language = language or case.language
         version = int(self.db.scalar(select(func.coalesce(func.max(Report.version), 0)).where(Report.case_id == case_id, Report.format == report_format))) + 1
         sections = self._build_sections(case_id)
+        evidence = EvidenceService(self.db).list_for_case(case_id)
+        findings = [finding for finding in FindingService(self.db).list_for_case(case_id) if finding.reviewer_status != "rejected"]
+        renderer = ReportRendererRegistry()
+        renderer_key = renderer.select(case, evidence, findings)
         coverage = self._coverage(sections)
         if report_format == "json":
-            content_obj: dict[str, Any] = {"case_id": case_id, "version": version, "language": language, "sections": sections}
+            content_obj: dict[str, Any] = {
+                "case_id": case_id,
+                "version": version,
+                "language": language,
+                "renderer": renderer_key,
+                "sections": sections,
+            }
             content = json.dumps(content_obj, indent=2, ensure_ascii=False, default=str)
             object_key = f"cases/{case_id}/reports/report_v{version}.json"
             content_type = "application/json"
@@ -75,7 +86,7 @@ class ReportService:
             object_path=object_uri,
             content_hash=self.object_store.sha256_bytes(content_bytes),
             evidence_coverage=coverage,
-            metadata_json={"generator": "report_worker", "sections": len(sections)},
+            metadata_json={"generator": "report_worker", "sections": len(sections)} | renderer.metadata(renderer_key),
             created_by=created_by,
         )
         self.db.add(report)

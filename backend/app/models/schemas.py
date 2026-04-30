@@ -338,6 +338,22 @@ class JobRunResponse(BaseModel):
     created_at: datetime
 
 
+class WorkflowRunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    case_id: str
+    workflow_id: str
+    mode: str
+    status: str
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict, serialization_alias="metadata")
+    error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class WorkerResult(BaseModel):
     case_id: str
     worker_name: str
@@ -352,6 +368,7 @@ class RunCaseResponse(BaseModel):
     workflow_id: str
     status: str
     mode: str
+    workflow_run_id: str | None = None
 
 
 class TxAnalyzerRuntimeHealth(BaseModel):

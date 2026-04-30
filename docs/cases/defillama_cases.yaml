@@ -1,5 +1,7 @@
-snapshot_date: "2026-04-29"
+snapshot_date: "2026-04-30"
 source: "https://defillama.com/hacks"
+golden_set_version: "v2"
+regression_scope: "7-case golden set for stable report, diagram, PDF, and workflow regression"
 cases:
   - project: "Bunni V2"
     date: "2025-09-02"

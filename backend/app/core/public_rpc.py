@@ -110,6 +110,23 @@ def resolve_rpc_url(network) -> tuple[str | None, str]:
     return None, "missing"
 
 
+def resolve_explorer_api_key(network) -> tuple[str | None, str]:
+    """Resolve explorer API key without treating empty env vars as configured."""
+    refs = []
+    if network.explorer_api_key_secret_ref:
+        refs.append(network.explorer_api_key_secret_ref)
+    refs.extend(["ETHERSCAN_API_KEY", f"{str(network.key).upper()}_EXPLORER_API_KEY"])
+    seen: set[str] = set()
+    for ref in refs:
+        if not ref or ref in seen:
+            continue
+        seen.add(ref)
+        value = os.getenv(ref)
+        if value:
+            return value, f"env:{ref}"
+    return None, "missing"
+
+
 def apply_network_middlewares(w3: Web3, network_key: str) -> Web3:
     if network_key == "bsc":
         w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)

@@ -83,6 +83,7 @@ class Case(Base):
     reports: Mapped[list["Report"]] = relationship(back_populates="case", cascade="all, delete-orphan")
     diagrams: Mapped[list["DiagramSpec"]] = relationship(back_populates="case", cascade="all, delete-orphan")
     job_runs: Mapped[list["JobRun"]] = relationship(back_populates="case", cascade="all, delete-orphan")
+    workflow_runs: Mapped[list["WorkflowRun"]] = relationship(back_populates="case", cascade="all, delete-orphan")
 
 
 class Transaction(Base):
@@ -349,6 +350,29 @@ class JobRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     case: Mapped[Case] = relationship(back_populates="job_runs")
+
+
+class WorkflowRun(Base):
+    __tablename__ = "workflow_runs"
+    __table_args__ = (
+        Index("idx_workflow_runs_case_created", "case_id", "created_at"),
+        Index("idx_workflow_runs_status", "status"),
+        UniqueConstraint("workflow_id", name="uq_workflow_runs_workflow_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    case_id: Mapped[str] = mapped_column(ForeignKey("cases.id", ondelete="CASCADE"), nullable=False)
+    workflow_id: Mapped[str] = mapped_column(Text, nullable=False)
+    mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="running")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    case: Mapped[Case] = relationship(back_populates="workflow_runs")
 
 
 class AuditLog(Base):

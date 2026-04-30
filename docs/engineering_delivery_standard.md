@@ -20,6 +20,7 @@
 - `README.md`：入口说明、端口、启动方式、验证命令发生变化时必须更新。
 - `backend/README.md`：后端启动、环境变量、测试覆盖、worker 行为发生变化时必须更新。
 - `docs/current_implementation_status.md`：实现状态、已知缺口、性能策略、报告/PDF/图例能力发生变化时必须更新。
+- `docs/analyst_operations_guide.md`：分析师操作、seed type 语义、RPC/Explorer key、PDF 下载或排障方式变化时必须更新。
 - `docs/public_rpc_sources.md`：RPC、Explorer、链配置或验证结果变化时必须更新。
 - `docs/cases/defillama_cases.yaml`：新增、删除或修正安全事件 case 时必须更新。
 - `docs/spec/onchain_rca_workbench_spec_v1/`：只作为原始规格基准保存，除非明确要修订规格版本。
@@ -46,6 +47,7 @@
 - API/服务改动：至少检查 `curl -sS http://127.0.0.1:8100/api/health`。
 - 端口相关改动：检查 `3000/4000/3100/8100`，避免 RCA 占用 MegaETH Pentest Workbench 端口。
 - 报告/PDF/图例改动：至少用一个已有 case 验证 Markdown report、diagram specs、PDF export status 和 PDF download。
+- 性能/分页改动：至少运行后端测试，并用 `scripts/seed_performance_data.py` 的小数据 smoke 验证 seed 脚本可执行。
 
 ### 端口保护
 
@@ -81,6 +83,7 @@ Project-owned delivery documents must be bilingual:
 - `README.md`: update when entry instructions, ports, startup flow, or verification commands change.
 - `backend/README.md`: update when backend startup, environment variables, test coverage, or worker behavior changes.
 - `docs/current_implementation_status.md`: update when implementation status, known gaps, performance strategy, report/PDF/diagram capabilities change.
+- `docs/analyst_operations_guide.md`: update when analyst operations, seed type semantics, RPC/Explorer keys, PDF download, or troubleshooting flow changes.
 - `docs/public_rpc_sources.md`: update when RPC, explorer, chain configuration, or validation results change.
 - `docs/cases/defillama_cases.yaml`: update when security incident cases are added, removed, or corrected.
 - `docs/spec/onchain_rca_workbench_spec_v1/`: keep as the original specification baseline unless a new specification version is explicitly requested.
@@ -107,6 +110,7 @@ Choose verification based on the change scope:
 - API/service changes: at minimum check `curl -sS http://127.0.0.1:8100/api/health`.
 - Port-related changes: check `3000/4000/3100/8100` and avoid letting RCA take the MegaETH Pentest Workbench ports.
 - Report/PDF/diagram changes: verify Markdown report, diagram specs, PDF export status, and PDF download with at least one existing case.
+- Performance/pagination changes: run backend tests and verify the seed script with a small smoke run of `scripts/seed_performance_data.py`.
 
 ### Port Protection
 

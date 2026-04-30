@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.models.schemas import CaseStatus
 from app.services.case_service import CaseService
+from app.services.job_service import current_workflow_run_id
+from app.services.workflow_run_service import WorkflowRunService
 from app.workers.acl_forensics_worker import ACLForensicsWorker
 from app.workers.decode_worker import DecodeWorker
 from app.workers.environment_check_worker import EnvironmentCheckWorker
@@ -21,9 +23,27 @@ class InlineCaseRunner:
         self.db = db
         self.case_service = CaseService(db)
 
-    def run(self, case_id: str) -> dict:
+    def run(self, case_id: str, workflow_id: str | None = None, workflow_run_id: str | None = None) -> dict:
         results: list[dict] = []
         any_failed = False
+        workflow_id = workflow_id or f"case-{case_id}"
+        workflow_service = WorkflowRunService(self.db)
+        workflow_run = workflow_service.start(case_id, workflow_id, "inline", {"runner": "InlineCaseRunner"}) if workflow_run_id is None else None
+        active_workflow_run_id = workflow_run_id or (workflow_run.id if workflow_run else None)
+        token = current_workflow_run_id.set(active_workflow_run_id)
+        try:
+            result = self._run_steps(case_id, results, any_failed)
+            workflow_service.finish(active_workflow_run_id, result["status"], {"step_count": len(result["steps"])}) if active_workflow_run_id else None
+            result["workflow_run_id"] = active_workflow_run_id
+            return result
+        except Exception as exc:
+            workflow_service.finish(active_workflow_run_id, CaseStatus.FAILED.value, error=str(exc)) if active_workflow_run_id else None
+            self.case_service.update_status(case_id, CaseStatus.FAILED.value)
+            raise
+        finally:
+            current_workflow_run_id.reset(token)
+
+    def _run_steps(self, case_id: str, results: list[dict], any_failed: bool) -> dict:
 
         env_result = self._step(case_id, CaseStatus.ENV_CHECKING, EnvironmentCheckWorker(self.db).run, CaseStatus.ENV_CHECKED)
         results.append(env_result)

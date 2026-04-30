@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from temporalio.client import Client
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import Actor, get_actor, require_capability
-from app.models.schemas import CaseCreate, CaseDetailSummaryResponse, CaseResponse, CaseSummaryResponse, RunCaseResponse, TimelineItem, TransactionCreate, TransactionResponse
+from app.models.schemas import CaseCreate, CaseDetailSummaryResponse, CaseResponse, CaseSummaryResponse, RunCaseResponse, TimelineItem, TransactionCreate, TransactionResponse, WorkflowRunResponse
 from app.services.case_service import CaseService
+from app.services.workflow_run_service import WorkflowRunService
 from app.workflows.case_analysis_workflow import CaseAnalysisWorkflow
 from app.workflows.case_runner import InlineCaseRunner
 
@@ -56,13 +59,36 @@ def get_case(case_id: str, db: Session = Depends(get_db), actor: Actor = Depends
 async def run_case(case_id: str, db: Session = Depends(get_db), actor: Actor = Depends(get_actor)):
     require_capability(actor, "run")
     CaseService(db).get_case(case_id)
-    workflow_id = f"case-{case_id}"
+    workflow_id = f"case-{case_id}-{uuid4()}"
     if settings.workflow_mode == "temporal":
+        workflow_run = WorkflowRunService(db).start(case_id, workflow_id, "temporal", {"actor": actor.user_id})
         client = await Client.connect(settings.temporal_address)
-        await client.start_workflow(CaseAnalysisWorkflow.run, case_id, id=workflow_id, task_queue="case-analysis")
-        return RunCaseResponse(workflow_id=workflow_id, status="started", mode="temporal")
-    result = InlineCaseRunner(db).run(case_id)
-    return RunCaseResponse(workflow_id=workflow_id, status=result["status"], mode="inline")
+        await client.start_workflow(CaseAnalysisWorkflow.run, case_id, workflow_run.id, id=workflow_id, task_queue="case-analysis")
+        return RunCaseResponse(workflow_id=workflow_id, workflow_run_id=workflow_run.id, status="started", mode="temporal")
+    result = InlineCaseRunner(db).run(case_id, workflow_id=workflow_id)
+    return RunCaseResponse(workflow_id=workflow_id, workflow_run_id=result.get("workflow_run_id"), status=result["status"], mode="inline")
+
+
+@router.get("/{case_id}/workflow-runs", response_model=list[WorkflowRunResponse])
+def list_workflow_runs(
+    case_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(get_actor),
+):
+    require_capability(actor, "read")
+    CaseService(db).get_case(case_id)
+    return WorkflowRunService(db).list_for_case(case_id, limit=limit, offset=offset)
+
+
+@router.post("/workflow-runs/{workflow_run_id}/cancel", response_model=WorkflowRunResponse)
+def cancel_workflow_run(workflow_run_id: str, db: Session = Depends(get_db), actor: Actor = Depends(get_actor)):
+    require_capability(actor, "run")
+    row = WorkflowRunService(db).cancel(workflow_run_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Workflow run not found")
+    return row
 
 
 @router.get("/{case_id}/transactions", response_model=list[TransactionResponse])

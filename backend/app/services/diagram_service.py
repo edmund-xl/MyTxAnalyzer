@@ -101,12 +101,23 @@ class DiagramService:
         lines = ["graph LR"]
         nodes: list[dict[str, Any]] = []
         edges: list[dict[str, Any]] = []
+        attack_steps = self._extract_attack_steps(evidence)
         evidence_label = self._edge_label(evidence[:4])
         self._add_node(lines, nodes, "seed", "Seed / 入口")
-        if not transactions:
+        if attack_steps:
+            previous = "seed"
+            for index, step in enumerate(attack_steps[:12], start=1):
+                node = f"step{index}"
+                self._add_node(lines, nodes, node, self._short(step.get("label") or step.get("id") or f"Step {index}", 48))
+                self._add_edge(lines, edges, previous, node, self._short(step.get("evidence") or step.get("tx_hash") or step.get("confidence") or "evidence", 52))
+                previous = node
+            if findings:
+                self._add_node(lines, nodes, "root", self._short(findings[0].title, 40))
+                self._add_edge(lines, edges, previous, "root", findings[0].confidence)
+        elif not transactions:
             self._add_node(lines, nodes, "evidence", "已确认 evidence")
             self._add_edge(lines, edges, "seed", "evidence", evidence_label or "external_alert")
-        for index, tx in enumerate(transactions[:10], start=1):
+        for index, tx in enumerate([] if attack_steps else transactions[:10], start=1):
             tx_node = f"tx{index}"
             from_node = f"from{index}"
             to_node = f"to{index}"
@@ -116,7 +127,7 @@ class DiagramService:
             self._add_edge(lines, edges, "seed" if index == 1 else f"tx{index - 1}", from_node, "next")
             self._add_edge(lines, edges, from_node, tx_node, tx.method_name or tx.method_selector or "call")
             self._add_edge(lines, edges, tx_node, to_node, evidence_label or tx.artifact_status)
-        if findings:
+        if findings and not attack_steps:
             self._add_node(lines, nodes, "root", self._short(findings[0].title, 40))
             self._add_edge(lines, edges, f"tx{min(len(transactions), 10)}" if transactions else "evidence", "root", findings[0].confidence)
         confidence = self._diagram_confidence(evidence, transactions)
@@ -238,7 +249,7 @@ class DiagramService:
             explicit_flow_source = item.source_type in {"balance_diff", "receipt_log"} or "flow" in item.claim_key.lower() or "transfer" in item.claim_key.lower()
             if not explicit_flow_source:
                 continue
-            for key in ("flows", "token_flows", "large_token_flows", "transfers", "token_transfers"):
+            for key in ("fund_flow_edges", "flows", "token_flows", "large_token_flows", "transfers", "token_transfers"):
                 value = decoded.get(key)
                 if isinstance(value, list):
                     candidates.extend(value)
@@ -257,11 +268,31 @@ class DiagramService:
                         "to": target,
                         "asset": candidate.get("asset") or candidate.get("token") or candidate.get("symbol"),
                         "amount": candidate.get("amount") or candidate.get("amount_decimal") or candidate.get("value"),
-                        "confidence": item.confidence,
-                        "evidence_id": item.id,
+                        "tx_hash": candidate.get("tx_hash") or decoded.get("tx_hash"),
+                        "log_index": candidate.get("log_index"),
+                        "confidence": candidate.get("confidence") or item.confidence,
+                        "evidence_id": candidate.get("evidence_id") or item.id,
                     }
                 )
         return flows
+
+    def _extract_attack_steps(self, evidence: list) -> list[dict[str, Any]]:
+        steps: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for item in evidence:
+            decoded = item.decoded or {}
+            raw_steps = decoded.get("attack_steps")
+            if not isinstance(raw_steps, list):
+                continue
+            for step in raw_steps:
+                if not isinstance(step, dict):
+                    continue
+                key = str(step.get("id") or step.get("label") or step.get("tx_hash") or len(steps))
+                if key in seen:
+                    continue
+                seen.add(key)
+                steps.append({**step, "evidence_id": item.id})
+        return steps
 
     def _add_node(self, lines: list[str], nodes: list[dict[str, Any]], node_id: str, label: str) -> None:
         if any(node["id"] == node_id for node in nodes):
@@ -299,7 +330,7 @@ class DiagramService:
         first = flows[0]
         label = " ".join(
             str(part)
-            for part in [first.get("amount"), first.get("asset"), first.get("confidence")]
+            for part in [first.get("amount"), first.get("asset"), first.get("tx_hash") or first.get("evidence_id"), first.get("confidence")]
             if part not in {None, ""}
         )
         if len(flows) > 1:
