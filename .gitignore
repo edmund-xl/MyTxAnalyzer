@@ -6,6 +6,7 @@
 test_rca_workbench.db
 **/test_rca_workbench.db
 .local_rca.db
+backend/rca_workbench.db
 .run-*.log
 .run-*.pid
 tmp/

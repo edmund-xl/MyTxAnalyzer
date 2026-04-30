@@ -11,12 +11,14 @@
 - `入口值`：填写交易 hash、Sui digest、地址或公开事件链接。
 - `标题`：可选。留空时系统按 seed 自动生成。
 
+如果输入值是 `0x` + 64 位十六进制字符，它是 EVM 交易哈希，不是地址。Dashboard 和后端会拒绝把这类值作为 `地址` seed 创建 case，应切换到“交易哈希 / Digest”。
+
 创建后进入 case 详情页，点击 `Run Analysis` 启动 inline workflow。开发环境默认使用 `WORKFLOW_MODE=inline`，不会占用 `3000/4000`。
 
 ### 2. 如何选择入口类型
 
 - `交易哈希 / Digest`：证据质量最高。EVM 会拉取 transaction、receipt、logs，并尝试 TxAnalyzer artifact；Sui 会调用 Sui JSON-RPC。
-- `地址`：适合只有攻击者或合约地址时使用。EVM 地址扩展依赖 Explorer API key；没有 key 时系统只记录降级 evidence boundary，不伪造交易。
+- `地址`：适合只有攻击者或合约地址时使用。EVM 地址必须是 `0x` + 40 位十六进制字符；EVM 地址扩展依赖 Explorer API key，没有 key 时系统只记录降级 evidence boundary，不伪造交易。
 - `外部事件链接`：适合只有 DefiLlama、官方复盘或新闻链接时先建案。系统会记录 external alert evidence，等待后续补 seed transaction。
 
 ### 3. 配置 RPC / Explorer Key
@@ -115,12 +117,14 @@ Open `http://127.0.0.1:3100` and use the Dashboard “New Analysis” form:
 - `Entry value`: enter a transaction hash, Sui digest, address, or public incident link.
 - `Title`: optional. If omitted, the system generates one from the seed.
 
+If the value is `0x` plus 64 hex characters, it is an EVM transaction hash, not an address. The Dashboard and backend reject that value as an `Address` seed; switch the entry type to “Transaction hash / Digest”.
+
 After creation, open the case detail page and click `Run Analysis` to start the inline workflow. Local development defaults to `WORKFLOW_MODE=inline` and does not use ports `3000/4000`.
 
 ### 2. Choose The Seed Type
 
 - `Transaction hash / Digest`: highest evidence quality. EVM pulls transaction, receipt, logs, and TxAnalyzer artifacts where possible; Sui uses Sui JSON-RPC.
-- `Address`: useful when only an attacker or contract address is known. EVM address expansion requires an Explorer API key; without a key the system records a degradation evidence boundary and does not fabricate transactions.
+- `Address`: useful when only an attacker or contract address is known. EVM addresses must be `0x` plus 40 hex characters. EVM address expansion requires an Explorer API key; without a key the system records a degradation evidence boundary and does not fabricate transactions.
 - `External incident link`: useful when only DefiLlama, an official postmortem, or a news link is available. The system records external alert evidence and waits for a later seed transaction.
 
 ### 3. Configure RPC / Explorer Keys

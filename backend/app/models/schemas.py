@@ -2,9 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
+import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+EVM_ADDRESS_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
+EVM_TX_HASH_RE = re.compile(r"^0x[a-fA-F0-9]{64}$")
+SUI_ADDRESS_RE = re.compile(r"^0x[a-fA-F0-9]{1,64}$")
 
 
 class SeedType(StrEnum):
@@ -100,6 +106,22 @@ class CaseCreate(BaseModel):
         if not value:
             raise ValueError("seed_value is required")
         return value
+
+    @model_validator(mode="after")
+    def seed_value_matches_seed_type(self) -> "CaseCreate":
+        network_key = self.network_key.lower()
+        value = self.seed_value.strip()
+
+        if self.seed_type == SeedType.address:
+            if EVM_TX_HASH_RE.fullmatch(value):
+                raise ValueError("seed_value looks like an EVM transaction hash; use seed_type=transaction")
+            if network_key == "sui":
+                if not SUI_ADDRESS_RE.fullmatch(value):
+                    raise ValueError("Sui address seed_value must be 0x followed by 1 to 64 hex characters")
+            elif not EVM_ADDRESS_RE.fullmatch(value):
+                raise ValueError("address seed_value must be a 42-character EVM address")
+
+        return self
 
 
 class CaseResponse(BaseModel):

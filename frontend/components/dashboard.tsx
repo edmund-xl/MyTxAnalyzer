@@ -265,7 +265,7 @@ function seedInputHelp(seedType: CaseForm["seed_type"], network: Network | undef
   if (seedType === "address") {
     return {
       placeholder: network?.network_type === "sui" ? "例如 0x27bc7a3c..." : "例如 0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
-      description: "用于从地址发现相关交易。EVM 地址发现依赖对应 Explorer API key；Sui 地址发现后续会接 native adapter。"
+      description: "用于从地址发现相关交易；如果手里是 0x + 64 位交易哈希，请切换到“交易哈希 / Digest”。"
     };
   }
   return {
@@ -284,6 +284,15 @@ function seedValidationMessage(seedType: CaseForm["seed_type"], value: string, n
   }
   if (seedType === "transaction") {
     return /^0x[a-fA-F0-9]{64}$/.test(trimmed) ? null : "请输入 66 位 EVM 交易哈希，格式为 0x + 64 个十六进制字符。";
+  }
+  if (seedType === "address" && network?.network_type === "sui") {
+    return /^0x[a-fA-F0-9]{1,64}$/.test(trimmed) ? null : "请输入 Sui 地址，格式为 0x + 1 到 64 个十六进制字符。";
+  }
+  if (seedType === "address") {
+    if (/^0x[a-fA-F0-9]{64}$/.test(trimmed)) {
+      return "这看起来是 EVM 交易哈希，请把入口类型切换为“交易哈希 / Digest”。";
+    }
+    return /^0x[a-fA-F0-9]{40}$/.test(trimmed) ? null : "请输入 42 位 EVM 地址，格式为 0x + 40 个十六进制字符。";
   }
   if (seedType === "alert") {
     return /^https?:\/\/\S+$/i.test(trimmed) ? null : "请输入以 http:// 或 https:// 开头的公开事件链接。";

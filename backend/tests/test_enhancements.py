@@ -188,3 +188,33 @@ def test_address_seed_report_is_boundary_not_attack_rca(client, db_session, monk
     assert "不是完整攻击 RCA" in content
     assert "不能确认攻击路径、根因或损失" in content
     assert "铸造虚假抵押品" not in content
+
+
+def test_address_seed_rejects_evm_transaction_hash(client):
+    response = client.post(
+        "/api/cases",
+        json={
+            "network_key": "megaeth",
+            "seed_type": "address",
+            "seed_value": "0x" + "a" * 64,
+            "depth": "full",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "use seed_type=transaction" in response.text
+
+
+def test_address_seed_accepts_evm_address(client):
+    response = client.post(
+        "/api/cases",
+        json={
+            "network_key": "megaeth",
+            "seed_type": "address",
+            "seed_value": "0x" + "a" * 40,
+            "depth": "full",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["seed_type"] == "address"

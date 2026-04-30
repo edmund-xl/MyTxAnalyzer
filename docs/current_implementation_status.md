@@ -2,7 +2,7 @@
 
 ## 中文
 
-快照日期：2026-04-30
+快照日期：2026-05-01
 
 本文记录 RCA Workbench 当前本地实现状态。原始规格包保留在 `docs/spec/onchain_rca_workbench_spec_v1/`，作为实现基准。
 
@@ -24,6 +24,7 @@ RCA Workbench 与 MegaETH Pentest Workbench 已明确隔离：
 - 已为 case list、transaction timeline、evidence、reports、jobs、diagrams、report exports 增加运行时索引。
 - Provider 解析采用自带密钥优先、公共 RPC fallback：RPC / Explorer key 来源会进入 environment capability matrix。
 - EVM receipt parser 已标准化 Transfer、Approval、fund-flow edge 和 attack step；Sui 仍使用 Sui JSON-RPC 的 events/balanceChanges。
+- Case create 会校验 seed 类型和值的形状：EVM `address` seed 必须是 `0x` + 40 位十六进制字符；`0x` + 64 位交易哈希会被拒绝并提示改用 `transaction` seed。
 - Address seed 如果没有 Explorer txlist / seed transaction，会生成 evidence boundary 和“地址线索预分析报告”，不再套用攻击事件报告模板。
 - FundFlow worker 读取标准化 `fund_flow_edges`，资金流图按同源地址聚合并在边上标注 amount、asset、tx/evidence 和 confidence。
 - LossCalculator worker 已支持稳定币直接估值；缺少价格源时只写 evidence boundary，不伪造 USD 结论。
@@ -38,7 +39,7 @@ RCA Workbench 与 MegaETH Pentest Workbench 已明确隔离：
 
 ### 前端已实现范围
 
-- Dashboard case list 和中文优先的 New Analysis 简化表单。
+- Dashboard case list 和中文优先的 New Analysis 简化表单；地址入口会识别误填的 EVM 交易哈希并提示切换到“交易哈希 / Digest”。
 - Case detail tabs：Overview、Diagrams、Evidence、Findings、Reports、Jobs。
 - Case Detail 已改为 tab 懒加载：
   - Overview 只加载 case metadata 和聚合计数。
@@ -169,7 +170,7 @@ DATABASE_URL="sqlite+pysqlite:///./perf_rca_workbench.db" \
 
 ## English
 
-Snapshot date: 2026-04-30
+Snapshot date: 2026-05-01
 
 This document records the current local implementation state of the RCA Workbench. The original source specification remains under `docs/spec/onchain_rca_workbench_spec_v1/` as the implementation baseline.
 
@@ -191,6 +192,7 @@ The RCA Workbench is separated from the MegaETH Pentest Workbench:
 - Runtime indexes exist for case lists, transaction timelines, evidence, reports, jobs, diagrams, and report exports.
 - Provider resolution uses bring-your-own keys first and public RPC fallback. RPC / Explorer key sources are recorded in the environment capability matrix.
 - The EVM receipt parser normalizes Transfer, Approval, fund-flow edges, and attack steps. Sui continues to use Sui JSON-RPC events/balanceChanges.
+- Case creation validates seed type and value shape: EVM `address` seeds must be `0x` plus 40 hex characters; `0x` plus 64 hex transaction hashes are rejected with guidance to use a `transaction` seed.
 - Address seeds without Explorer txlist or a seed transaction now produce an evidence boundary and an “address lead pre-analysis report” instead of using the attack incident report template.
 - The FundFlow worker consumes standardized `fund_flow_edges`; fund-flow diagrams aggregate by common source address and label each edge with amount, asset, tx/evidence, and confidence.
 - The LossCalculator worker supports direct stablecoin valuation. When a price source is missing, it records an evidence boundary instead of fabricating USD loss.
@@ -205,7 +207,7 @@ The RCA Workbench is separated from the MegaETH Pentest Workbench:
 
 ### Implemented Frontend Scope
 
-- Dashboard case list and Chinese-first simplified New Analysis form.
+- Dashboard case list and Chinese-first simplified New Analysis form; the address entry detects accidental EVM transaction hashes and tells the analyst to switch to “Transaction hash / Digest”.
 - Case detail tabs: Overview, Diagrams, Evidence, Findings, Reports, Jobs.
 - Case Detail now lazy-loads tab data:
   - Overview loads case metadata and aggregate counts only.
