@@ -174,6 +174,15 @@ class ReportService:
                 ("4. 进入正式 RCA 的前置条件", self._address_boundary_next_steps(case)),
                 ("5. Evidence 与 Job Run 附录", self._address_boundary_appendix(evidence, jobs)),
             ]
+        elif report_type == "external_event_preanalysis":
+            bodies = [
+                ("TL;DR", self._external_event_tldr(case, evidence)),
+                ("1. 当前可确认范围", self._external_event_overview(case, evidence, findings)),
+                ("2. 外部情报与本地证据边界", self._external_event_evidence_boundary(evidence)),
+                ("3. 当前不能确认的内容", self._external_event_unconfirmed()),
+                ("4. 进入正式 RCA 的前置条件", self._external_event_next_steps(case)),
+                ("5. Evidence 与 Job Run 附录", self._address_boundary_appendix(evidence, jobs)),
+            ]
         elif report_type == "transaction_preanalysis":
             bodies = [
                 ("TL;DR", self._tldr(case, timeline, evidence)),
@@ -298,6 +307,8 @@ class ReportService:
         report_type = (claim_graph.metadata.get("report_type") if claim_graph else None) or "attack_rca"
         if report_type == "address_boundary":
             suffix = "地址线索预分析报告"
+        elif report_type == "external_event_preanalysis":
+            suffix = "外部事件预分析报告"
         elif report_type == "transaction_preanalysis":
             suffix = "链上交易预分析报告"
         else:
@@ -309,6 +320,89 @@ class ReportService:
 
     def _diagrams(self, diagrams: list) -> str:
         return DiagramService(self.db, self.object_store).markdown_for_diagrams(diagrams)
+
+    def _external_event_tldr(self, case, evidence: list) -> str:
+        record = self._external_event_record(case, evidence)
+        return "\n".join(
+            [
+                "> **报告类型:** 外部事件预分析，不是完整攻击 RCA",
+                f"> **事件名称:** {record.get('name', case.title or case.id)}",
+                f"> **来源:** {record.get('source', case.seed_value)}",
+                f"> **链:** {record.get('chains', case.network.name)}",
+                f"> **DefiLlama 分类:** {record.get('classification', '-')}",
+                f"> **技术标签:** {record.get('technique', '-')}",
+                f"> **损失口径:** {record.get('amount', '-')}",
+                "> **当前结论:** 只有外部事件线索；尚未建立 seed transaction、receipt、trace 或 fund-flow 范围。",
+                "> **下一步进入正式 RCA 的条件:** 补充核心交易 hash / digest，或补齐官方复盘与链上 evidence 后重新运行。",
+            ]
+        )
+
+    def _external_event_overview(self, case, evidence: list, findings: list) -> str:
+        record = self._external_event_record(case, evidence)
+        finding = findings[0] if findings else None
+        rows = [
+            ("事件", record.get("name", case.title or case.id), "外部情报"),
+            ("日期", record.get("date", "-"), "DefiLlama/API"),
+            ("链", record.get("chains", case.network.name), "DefiLlama/API"),
+            ("金额", record.get("amount", "-"), "外部损失口径"),
+            ("分类", record.get("classification", "-"), "DefiLlama/API"),
+            ("技术标签", record.get("technique", "-"), "DefiLlama/API"),
+            ("当前 finding", finding.title if finding else "无", "RCA worker"),
+        ]
+        return "\n\n".join(
+            [
+                f"`{case.title or case.id}` 是从外部事件入口创建的预分析 case。系统已记录事件线索，但还没有交易范围，因此不能把外部标签直接写成本地链上 RCA 结论。",
+                self._table(["字段", "值", "来源"], rows),
+                "本报告的价值是把外部事件先纳入队列，并明确缺失哪些链上证据；它不是最终攻击复盘。",
+            ]
+        )
+
+    def _external_event_evidence_boundary(self, evidence: list) -> str:
+        rows = [(item.id, item.source_type, item.producer, item.claim_key, item.confidence, item.raw_path or "-") for item in evidence]
+        return "\n\n".join(
+            [
+                "外部情报可以指导排查优先级，但不能替代 deterministic evidence。当前没有 seed transaction 时，以下内容只能作为线索：项目名、日期、链、损失口径、分类和技术标签。",
+                self._table(["Evidence", "Source", "Producer", "Claim", "Confidence", "Raw Path"], rows) if rows else "暂无 evidence。",
+            ]
+        )
+
+    def _external_event_unconfirmed(self) -> str:
+        return "\n".join(
+            [
+                "当前报告明确不确认以下内容：",
+                "",
+                "- 不确认攻击者地址或受害合约地址。",
+                "- 不确认调用路径、漏洞函数或缺失校验。",
+                "- 不确认资金流终点、bridge 路径或洗钱路径。",
+                "- 不确认损失金额为本地链上复算值。",
+                "- 不输出修复建议，因为修复建议必须绑定 root cause claim。",
+            ]
+        )
+
+    def _external_event_next_steps(self, case) -> str:
+        return self._table(
+            ["前置条件", "为什么需要", "完成后动作"],
+            [
+                ("Seed transaction / Sui digest", "建立交易范围和时间线", "切换入口类型为交易哈希 / Digest 后重新运行"),
+                ("官方 postmortem", "确认机制、损失口径和修复动作", "导入 external_incident_report evidence"),
+                ("Explorer / RPC 能力", "拉取 receipt、events、trace 或 Sui transaction block", "运行 discovery、TxAnalyzer 或 Sui native parser"),
+                ("Reviewer 复核", "把外部标签转成 evidence-bound finding", "Approve / reject findings 后再 publish"),
+            ],
+        )
+
+    def _external_event_record(self, case, evidence: list) -> dict[str, Any]:
+        record: dict[str, Any] = {"name": case.title, "source": case.seed_value}
+        for item in evidence:
+            if item.claim_key not in {"defillama_hack_record", "external_incident_seed", "external_incident_report"}:
+                continue
+            decoded = dict(item.decoded or {})
+            record.update(decoded)
+            if item.raw_path and not record.get("source"):
+                record["source"] = item.raw_path
+        chains = record.get("chains") or record.get("chain")
+        if isinstance(chains, list):
+            record["chains"] = ", ".join(str(chain) for chain in chains)
+        return record
 
     def _address_boundary_next_steps(self, case) -> str:
         return self._table(

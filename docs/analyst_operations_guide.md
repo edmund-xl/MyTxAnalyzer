@@ -25,6 +25,8 @@ MegaETH 公共 RPC 可能出现 `eth_getTransactionByHash` 返回空、但 recei
 
 单笔 native value transfer 只证明资金移动，不自动等同于攻击、损失或漏洞根因。没有 calldata、事件日志、合约/trace 异常或外部事件证据时，报告会写成“链上交易预分析报告”。
 
+外部事件链接只是一条情报入口。没有 seed transaction / Sui digest / txlist 时，报告会写成“外部事件预分析报告”，只记录 DefiLlama 或公开复盘口径和本地证据缺口，不直接输出攻击路径、根因、损失复算或修复建议。
+
 ### 3. 配置 RPC / Explorer Key
 
 密钥只放在 `.env` 或运行环境变量里，不能入库、不能提交。
@@ -145,6 +147,8 @@ After creation, open the case detail page and click `Run Analysis` to start the 
 MegaETH public RPC may return an empty `eth_getTransactionByHash` response while the receipt is available. The system automatically uses the receipt block number to fetch the full block and recover transaction fields by hash; if the full block is also unavailable, the report must stay within a provider evidence boundary.
 
 A single native value transfer proves asset movement only. It is not automatically treated as an exploit, loss, or root cause. Without calldata, event logs, contract/trace anomalies, or external incident evidence, the report is generated as an “on-chain transaction pre-analysis report”.
+
+An external incident link is an intelligence entry point only. Without a seed transaction, Sui digest, or txlist scope, the report is generated as an “external incident pre-analysis report”. It records the DefiLlama or public-postmortem context and local evidence gaps, but does not output attack paths, root cause, locally recalculated loss, or remediation.
 
 ### 3. Configure RPC / Explorer Keys
 

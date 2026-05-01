@@ -192,6 +192,50 @@ def test_address_seed_report_is_boundary_not_attack_rca(client, db_session, monk
     assert "铸造虚假抵押品" not in content
 
 
+def test_alert_seed_report_is_external_event_preanalysis_not_attack_rca(client, db_session):
+    case = client.post(
+        "/api/cases",
+        json={
+            "title": "DefiLlama latest Wasabi Perps",
+            "network_key": "eth",
+            "seed_type": "alert",
+            "seed_value": "https://defillama.com/hacks?name=Wasabi%20Perps",
+            "depth": "full",
+        },
+    ).json()
+    EvidenceService(db_session).create_evidence(
+        case_id=case["id"],
+        source_type="external_alert",
+        producer="test",
+        claim_key="defillama_hack_record",
+        raw_path="https://api.llama.fi/hacks",
+        decoded={
+            "name": "Wasabi Perps",
+            "date": "2026-04-30",
+            "chains": ["Ethereum", "Base", "Berachain", "Blast"],
+            "amount": 5500000,
+            "classification": "Protocol Logic",
+            "technique": "Admin Key Compromised",
+        },
+        confidence="partial",
+    )
+
+    rca = RCAAgentWorker(db_session).run(case["id"])
+    report = client.post(f"/api/cases/{case['id']}/reports", json={"format": "markdown"})
+    report_id = report.json()["id"]
+    detail = client.get(f"/api/cases/{case['id']}/reports/{report_id}")
+    quality = client.get(f"/api/reports/{report_id}/quality")
+    content = detail.json()["content"]
+
+    assert rca.status == "success"
+    assert "外部事件预分析报告" in content
+    assert "不是完整攻击 RCA" in content
+    assert "Admin Key Compromised" in content
+    assert "攻击事件 RCA 报告" not in content
+    assert not any(issue["rule_id"] == "RQ-BLOCK-002" for issue in quality.json()["blocking_issues"])
+    assert not any(issue["rule_id"] == "RQ-WARN-002" for issue in quality.json()["warnings"])
+
+
 def test_address_seed_rejects_evm_transaction_hash(client):
     response = client.post(
         "/api/cases",

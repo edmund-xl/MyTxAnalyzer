@@ -77,6 +77,11 @@ class DiagramService:
 
     def _upsert(self, case_id: str, report_id: str | None, spec: dict[str, Any], created_by: str | None) -> DiagramSpec:
         content = spec["mermaid_source"].encode("utf-8")
+        nodes_edges = spec["nodes_edges"]
+        evidence_ids = spec["evidence_ids"]
+        for edge in nodes_edges.get("edges") or []:
+            if isinstance(edge, dict) and not edge.get("evidence_ids") and not edge.get("evidence_id") and evidence_ids:
+                edge["evidence_ids"] = evidence_ids[:8]
         object_uri = self.object_store.put_bytes(
             content,
             f"cases/{case_id}/diagrams/{spec['diagram_type']}.mmd",
@@ -88,8 +93,8 @@ class DiagramService:
         row.report_id = report_id
         row.title = spec["title"]
         row.mermaid_source = spec["mermaid_source"]
-        row.nodes_edges_json = spec["nodes_edges"]
-        row.evidence_ids = spec["evidence_ids"]
+        row.nodes_edges_json = nodes_edges
+        row.evidence_ids = evidence_ids
         row.confidence = spec["confidence"]
         row.source_type = spec["source_type"]
         row.object_path = object_uri

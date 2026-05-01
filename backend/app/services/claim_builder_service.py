@@ -37,6 +37,8 @@ class ClaimBuilderService:
 
         if report_type == "address_boundary":
             claims.extend(self._address_boundary_claims(case, evidence, all_evidence_ids))
+        elif report_type == "external_event_preanalysis":
+            claims.extend(self._external_event_claims(case, evidence, all_evidence_ids))
         elif report_type == "transaction_preanalysis":
             claims.extend(self._transaction_preanalysis_claims(case, transactions, evidence))
             financial.extend(self._transaction_financial_items(evidence))
@@ -80,6 +82,45 @@ class ClaimBuilderService:
                 reasoning="地址 seed 需要 Explorer txlist 或用户补充 seed transaction；孤立地址不能推导攻击路径。",
                 falsification="配置 Explorer API key 或补充 seed transaction 后重新运行 discovery。",
             )
+        ]
+
+    def _external_event_claims(self, case, evidence: list, evidence_ids: list[str]) -> list[ReportClaim]:
+        refs = self._refs(evidence)
+        incident = self._first_evidence(evidence, "external_incident_seed") or self._first_evidence(evidence, "defillama_hack_record")
+        incident_text = f"外部事件线索 `{case.seed_value}` 已登记，但当前没有 seed transaction 或链上交易范围。"
+        if incident and isinstance(incident.decoded, dict):
+            decoded = incident.decoded or {}
+            name = decoded.get("name") or decoded.get("title") or case.title
+            technique = decoded.get("technique")
+            amount = decoded.get("amount")
+            incident_text = f"DefiLlama / 外部事件线索显示 `{name}` 被记录为安全事件"
+            if technique:
+                incident_text += f"，技术标签为 `{technique}`"
+            if amount is not None:
+                incident_text += f"，损失口径约为 `{amount}` USD"
+            incident_text += "；这些信息仍属于外部情报，尚未被本地链上 evidence 复核。"
+        return [
+            ReportClaim(
+                claim_id="C-ALERT-001",
+                section="当前可确认范围",
+                claim_type="boundary",
+                text=incident_text,
+                confidence="partial",
+                support_evidence_ids=evidence_ids[:8],
+                evidence_refs=refs[:8],
+                reasoning="Alert seed is an intelligence lead. Formal RCA requires seed transactions, receipts, traces, events, or fund-flow evidence.",
+                falsification="补充 seed transaction / txlist / 官方 postmortem 后重新运行 workflow。",
+            ),
+            ReportClaim(
+                claim_id="C-ALERT-002",
+                section="当前不能确认的内容",
+                claim_type="boundary",
+                text="当前不能确认攻击路径、漏洞根因、攻击者地址、受害合约或本地复算损失。",
+                confidence="high",
+                support_evidence_ids=evidence_ids[:8],
+                evidence_refs=refs[:8],
+                reasoning="No transaction scope exists for this report version.",
+            ),
         ]
 
     def _transaction_preanalysis_claims(self, case, transactions: list, evidence: list) -> list[ReportClaim]:
@@ -302,6 +343,8 @@ class ClaimBuilderService:
         boundaries: list[str] = []
         if report_type == "address_boundary":
             boundaries.append("No transaction scope is available for this address seed.")
+        if report_type == "external_event_preanalysis":
+            boundaries.append("External incident lead only; no local transaction scope is available yet.")
         if report_type == "transaction_preanalysis":
             boundaries.append("Transaction evidence does not establish an exploit root cause or protocol loss.")
         if any(item.claim_key == "address_discovery_explorer_missing" for item in evidence):
@@ -313,6 +356,8 @@ class ClaimBuilderService:
     def _report_type(self, case, transactions: list, evidence: list, findings: list) -> str:
         if case.seed_type == "address" and (not transactions or any(item.claim_key == "address_discovery_explorer_missing" for item in evidence)):
             return "address_boundary"
+        if case.seed_type == "alert" and not transactions:
+            return "external_event_preanalysis"
         if self._is_transaction_observation(case, evidence, findings):
             return "transaction_preanalysis"
         return "attack_rca"

@@ -31,6 +31,25 @@ def test_claim_builder_creates_address_boundary_without_attack_claims(client, db
     assert all(claim.claim_type not in {"root_cause", "loss"} for claim in graph.claims)
 
 
+def test_claim_builder_creates_external_event_preanalysis_for_alert_seed(client, db_session):
+    case = _case(client, seed_type="alert", seed_value="https://defillama.com/hacks?name=Wasabi%20Perps")
+    EvidenceService(db_session).create_evidence(
+        case_id=case["id"],
+        source_type="external_alert",
+        producer="test",
+        claim_key="defillama_hack_record",
+        raw_path="https://api.llama.fi/hacks",
+        decoded={"name": "Wasabi Perps", "amount": 5500000, "technique": "Admin Key Compromised"},
+        confidence="partial",
+    )
+
+    graph = ClaimBuilderService(db_session).build_for_report(case["id"], 1, "generic_fallback")
+
+    assert graph.metadata["report_type"] == "external_event_preanalysis"
+    assert {claim.claim_type for claim in graph.claims} == {"boundary"}
+    assert all(claim.claim_type not in {"root_cause", "loss"} for claim in graph.claims)
+
+
 def test_claim_builder_creates_native_transfer_preanalysis_claims(client, db_session):
     tx_hash = "0x" + "3" * 64
     case = _case(client, seed_value=tx_hash)
