@@ -22,10 +22,10 @@ export function Shell({
   caseNavCaseId?: string;
 }) {
   const caseNavItems: Array<{ tab: ShellCaseTab; label: string; icon: React.ReactNode }> = [
-    { tab: "diagrams", label: "Diagrams", icon: <GitBranch size={17} /> },
-    { tab: "findings", label: "Findings", icon: <ShieldCheck size={17} /> },
-    { tab: "reports", label: "Reports", icon: <FileText size={17} /> },
-    { tab: "jobs", label: "Jobs", icon: <Activity size={17} /> }
+    { tab: "diagrams", label: "图例", icon: <GitBranch size={17} /> },
+    { tab: "findings", label: "发现项", icon: <ShieldCheck size={17} /> },
+    { tab: "reports", label: "报告", icon: <FileText size={17} /> },
+    { tab: "jobs", label: "任务", icon: <Activity size={17} /> }
   ];
 
   return (
@@ -34,7 +34,7 @@ export function Shell({
         <div className="brand">RCA Workbench</div>
         <nav className="nav">
           <Link className={`nav-item ${activeCaseTab ? "" : "active"}`} href="/">
-            <LayoutDashboard size={17} /> Dashboard
+            <LayoutDashboard size={17} /> 工作台
           </Link>
           {caseNavItems.map((item) =>
             onCaseTabChange ? (
@@ -55,7 +55,7 @@ export function Shell({
       </aside>
       <main className="main">
         <header className="topbar">
-          <strong>On-chain RCA Workbench</strong>
+          <strong>链上 RCA Workbench</strong>
           <select value={role} onChange={(event) => onRoleChange(event.target.value as Role)}>
             <option value="admin">admin</option>
             <option value="analyst">analyst</option>

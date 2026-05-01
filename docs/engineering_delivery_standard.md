@@ -25,6 +25,7 @@
 - `docs/cases/defillama_cases.yaml`：新增、删除或修正安全事件 case 时必须更新。
 - `docs/spec/onchain_rca_workbench_spec_v1/`：只作为原始规格基准保存，除非明确要修订规格版本。
 - 报告质量相关改动必须同步记录 Claim Graph、QA Gate、publish gate、quality API、frontend Reports tab 和 artifact 结构。
+- 报告/PDF/图例的读者可见内容必须中文优先；如需保留英文，只能是交易哈希、合约名、函数名、事件名、网络名、artifact key 或 API enum 等技术标识。
 
 ### 工程交付清单
 
@@ -48,6 +49,7 @@
 - API/服务改动：至少检查 `curl -sS http://127.0.0.1:8100/api/health`。
 - 端口相关改动：检查 `3000/4000/3100/8100`，避免 RCA 占用 MegaETH Pentest Workbench 端口。
 - 报告/PDF/图例改动：至少用一个已有 case 验证 Markdown report、diagram specs、PDF export status 和 PDF download。
+- 报告语言改动：至少扫描一份新生成 Markdown，确认没有英文模板标题、英文质量字段或英文占位文案；必要技术标识除外。
 - 报告质量改动：必须验证 `.claims.json`、`.quality.json`、`GET /api/reports/{report_id}/claims`、`GET /api/reports/{report_id}/quality`，以及 blocking issue 对 publish 的阻断行为。
 - 性能/分页改动：至少运行后端测试，并用 `scripts/seed_performance_data.py` 的小数据 smoke 验证 seed 脚本可执行。
 
@@ -90,6 +92,7 @@ Project-owned delivery documents must be bilingual:
 - `docs/cases/defillama_cases.yaml`: update when security incident cases are added, removed, or corrected.
 - `docs/spec/onchain_rca_workbench_spec_v1/`: keep as the original specification baseline unless a new specification version is explicitly requested.
 - Report quality changes must document the Claim Graph, QA Gate, publish gate, quality APIs, frontend Reports tab behavior, and artifact layout.
+- Reader-facing report/PDF/diagram content must be Chinese-first. English should remain only for technical identifiers such as transaction hashes, contract names, function names, event names, network names, artifact keys, or API enums.
 
 ### Engineering Delivery Checklist
 
@@ -113,6 +116,7 @@ Choose verification based on the change scope:
 - API/service changes: at minimum check `curl -sS http://127.0.0.1:8100/api/health`.
 - Port-related changes: check `3000/4000/3100/8100` and avoid letting RCA take the MegaETH Pentest Workbench ports.
 - Report/PDF/diagram changes: verify Markdown report, diagram specs, PDF export status, and PDF download with at least one existing case.
+- Report-language changes: scan at least one newly generated Markdown report and confirm there are no English template headings, quality labels, or placeholder phrases, except necessary technical identifiers.
 - Report quality changes: verify `.claims.json`, `.quality.json`, `GET /api/reports/{report_id}/claims`, `GET /api/reports/{report_id}/quality`, and publish blocking behavior for blocking issues.
 - Performance/pagination changes: run backend tests and verify the seed script with a small smoke run of `scripts/seed_performance_data.py`.
 

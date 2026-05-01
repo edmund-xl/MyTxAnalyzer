@@ -108,7 +108,7 @@ class ClaimBuilderService:
                 confidence="partial",
                 support_evidence_ids=evidence_ids[:8],
                 evidence_refs=refs[:8],
-                reasoning="Alert seed is an intelligence lead. Formal RCA requires seed transactions, receipts, traces, events, or fund-flow evidence.",
+                reasoning="外部事件入口只是一条情报线索。正式根因分析需要核心交易、交易收据、调用跟踪、事件日志或资金流证据。",
                 falsification="补充 seed transaction / txlist / 官方 postmortem 后重新运行 workflow。",
             ),
             ReportClaim(
@@ -119,7 +119,7 @@ class ClaimBuilderService:
                 confidence="high",
                 support_evidence_ids=evidence_ids[:8],
                 evidence_refs=refs[:8],
-                reasoning="No transaction scope exists for this report version.",
+                reasoning="本报告版本还没有建立交易范围。",
             ),
         ]
 
@@ -149,11 +149,11 @@ class ClaimBuilderService:
                     claim_id="C-TX-002",
                     section="调用与资金移动",
                     claim_type="fact",
-                    text=f"交易内确认 native value movement: {decoded.get('amount') or decoded.get('amount_raw')} from {decoded.get('from')} to {decoded.get('to')}.",
+                    text=f"交易内确认原生资产移动：{decoded.get('amount') or decoded.get('amount_raw')}，从 {decoded.get('from')} 转至 {decoded.get('to')}。",
                     confidence="high",
                     support_evidence_ids=[transfer.id],
                     evidence_refs=self._refs([transfer]),
-                    reasoning="native value movement comes from transaction value/balance evidence.",
+                    reasoning="原生资产移动来自交易 value 或余额变化证据。",
                     metadata=decoded,
                 )
             )
@@ -181,11 +181,11 @@ class ClaimBuilderService:
                     claim_id="C-SCOPE-001",
                     section="事件范围",
                     claim_type="fact",
-                    text=f"本报告范围包含 {len(transactions)} 笔交易，核心 seed 为 {case.seed_value}。",
+                    text=f"本报告范围包含 {len(transactions)} 笔交易，核心入口为 {case.seed_value}。",
                     confidence="high" if tx_evidence_ids else "medium",
                     support_evidence_ids=tx_evidence_ids,
                     evidence_refs=self._refs([item for item in evidence if item.id in tx_evidence_ids]),
-                    reasoning="交易范围来自 Case transaction scope 和 tx_metadata evidence。",
+                    reasoning="交易范围来自案例交易范围和交易元数据证据。",
                     metadata={"transaction_count": len(transactions), "timeline_count": len(timeline)},
                 )
             )
@@ -202,7 +202,11 @@ class ClaimBuilderService:
                     support_evidence_ids=root_ids,
                     evidence_refs=self._refs([item for item in evidence if item.id in root_ids]),
                     reasoning=self._root_reasoning(root_finding, renderer_family, invariants),
-                    falsification=(root_finding.falsification if root_finding else "If trace/source evidence contradicts the vulnerable path, downgrade this root-cause claim."),
+                    falsification=(
+                        self._localized_text(root_finding.falsification)
+                        if root_finding
+                        else "如果调用跟踪或源码证据与当前漏洞路径相矛盾，应下调该根因结论。"
+                    ),
                     metadata={
                         "finding_id": root_finding.id if root_finding else None,
                         "renderer_family": renderer_family,
@@ -217,12 +221,12 @@ class ClaimBuilderService:
                     claim_id=f"C-FINDING-{index:03d}",
                     section="结论与证据等级",
                     claim_type=claim_type,
-                    text=f"{finding.title}: {finding.claim}",
+                    text=f"{self._localized_text(finding.title)}：{self._localized_text(finding.claim)}",
                     confidence=self._confidence(finding.confidence),
                     support_evidence_ids=list(finding.evidence_ids),
                     evidence_refs=self._refs([item for item in evidence if item.id in set(finding.evidence_ids)]),
-                    reasoning=finding.rationale or "Finding generated from structured worker output and bound evidence.",
-                    falsification=finding.falsification,
+                    reasoning=self._localized_text(finding.rationale) if finding.rationale else "该结论来自结构化 worker 输出，并已绑定证据。",
+                    falsification=self._localized_text(finding.falsification),
                     metadata={"finding_type": finding.finding_type, "severity": finding.severity, "reviewer_status": finding.reviewer_status},
                 )
             )
@@ -241,7 +245,7 @@ class ClaimBuilderService:
                 confidence="medium",
                 support_evidence_ids=root.support_evidence_ids,
                 evidence_refs=root.evidence_refs,
-                reasoning="Remediation is tied to the accepted root-cause claim and renderer playbook.",
+                reasoning="修复建议绑定到已接受的根因结论和对应分析剧本。",
                 metadata={"root_cause_claim_id": root.claim_id},
             )
             for index, template in enumerate(templates[:5], start=1)
@@ -261,7 +265,7 @@ class ClaimBuilderService:
                 amount_display=str(decoded.get("amount") or decoded.get("amount_raw") or ""),
                 support_evidence_ids=[transfer.id],
                 confidence="high",
-                notes="Native value movement is not treated as confirmed protocol loss without exploit-specific evidence.",
+                notes="没有攻击特异性证据时，原生资产移动不能等同于已确认协议损失。",
             )
         ]
 
@@ -278,7 +282,7 @@ class ClaimBuilderService:
                     price_source=None,
                     support_evidence_ids=[item.id for item in loss_evidence[:6]],
                     confidence="medium" if loss_evidence else "partial",
-                    notes="Case-level USD loss is treated as probable unless a price source is present in evidence.",
+                    notes="如果证据中没有价格来源，case 级美元损失只作为推定损失处理。",
                 )
             )
         for index, item in enumerate(loss_evidence[:6], start=len(items) + 1):
@@ -298,7 +302,7 @@ class ClaimBuilderService:
                             amount_display=str(amount),
                             support_evidence_ids=[item.id],
                             confidence=self._confidence(edge.get("confidence") or item.confidence),
-                            notes="Token-denominated movement retained without confirmed USD pricing.",
+                            notes="保留代币数量层面的资金移动，但不把它写成已完成美元估值。",
                         )
                     )
                     break
@@ -309,7 +313,7 @@ class ClaimBuilderService:
                     category="out_of_scope",
                     asset="unknown",
                     confidence="partial",
-                    notes="No deterministic loss or price evidence was collected for this report version.",
+                    notes="本报告版本没有采集到确定性损失或价格证据。",
                 )
             )
         return items
@@ -330,9 +334,9 @@ class ClaimBuilderService:
                     support_evidence_ids=finding_ids[:5] if status == "accepted" else [],
                     contradicting_evidence_ids=[],
                     rationale=(
-                        "Selected renderer family is consistent with current findings and evidence."
+                        "当前分析类型与已有 finding 和 evidence 一致。"
                         if status == "accepted"
-                        else "Current structured evidence does not establish this as the primary explanation."
+                        else "当前结构化证据不足以把该假设确立为主要解释。"
                     ),
                     confidence="medium",
                 )
@@ -342,15 +346,15 @@ class ClaimBuilderService:
     def _global_boundaries(self, case, evidence: list, jobs: list, report_type: str) -> list[str]:
         boundaries: list[str] = []
         if report_type == "address_boundary":
-            boundaries.append("No transaction scope is available for this address seed.")
+            boundaries.append("地址入口尚未形成交易范围。")
         if report_type == "external_event_preanalysis":
-            boundaries.append("External incident lead only; no local transaction scope is available yet.")
+            boundaries.append("当前只有外部事件线索，本地尚未形成交易范围。")
         if report_type == "transaction_preanalysis":
-            boundaries.append("Transaction evidence does not establish an exploit root cause or protocol loss.")
+            boundaries.append("当前交易证据不能证明漏洞根因或协议损失。")
         if any(item.claim_key == "address_discovery_explorer_missing" for item in evidence):
-            boundaries.append("Explorer txlist/source enrichment is unavailable.")
+            boundaries.append("区块浏览器交易列表或源码补充能力不可用。")
         if any("TxAnalyzer root not found" in str(job.error or job.output) for job in jobs):
-            boundaries.append("TxAnalyzer artifacts are unavailable in this environment.")
+            boundaries.append("当前环境无法获得 TxAnalyzer 工件。")
         return boundaries
 
     def _report_type(self, case, transactions: list, evidence: list, findings: list) -> str:
@@ -379,9 +383,11 @@ class ClaimBuilderService:
         return ranked[0] if ranked else (findings[0] if findings else None)
 
     def _root_reasoning(self, finding, renderer_family: str, invariants: list[str]) -> str:
-        invariant = invariants[0] if invariants else "The protocol invariant is inferred from current renderer family."
-        rationale = finding.rationale if finding else "Root cause is derived from case-level RCA worker output."
-        return f"Violated invariant: {invariant} Vulnerable path / missing check: {rationale}"
+        invariant = invariants[0] if invariants else "协议不变量根据当前分析类型推断。"
+        rationale = self._localized_text(finding.rationale) if finding else "根因来自 case 级 RCA worker 输出。"
+        invariant = str(invariant).rstrip("。.")
+        rationale = str(rationale).rstrip()
+        return f"被违反的不变量：{invariant}。脆弱路径或缺失校验：{rationale}"
 
     def _deterministic_evidence_ids(self, evidence: list) -> list[str]:
         return [item.id for item in evidence if item.source_type in DETERMINISTIC_EVIDENCE_TYPES]
@@ -409,3 +415,21 @@ class ClaimBuilderService:
         normalized = name.replace(" ", "_").replace("-", "_").lower()
         family = renderer_family.lower()
         return any(part and part in family for part in normalized.split("_"))
+
+    def _localized_text(self, value: Any) -> str:
+        text = str(value or "")
+        replacements = {
+            "Asset movement evidence observed": "已观察到资产移动证据",
+            "Detected ": "检测到 ",
+            " native/token transfer evidence item(s).": " 条原生资产或代币转移证据。",
+            "Transfer logs and native value movement are deterministic fund-flow evidence, but they do not prove an exploit, root cause, or loss by themselves.": "Transfer 日志和原生资产移动属于确定性资金流证据，但单独不能证明存在攻击、漏洞根因或协议损失。",
+            "Correlate the transfer with exploit-specific receipt logs, permission changes, source code, trace, price impact, or external incident evidence before treating it as a security finding.": "在把资金移动作为安全结论前，需要把它与攻击特异性的 receipt 日志、权限变化、源码、调用跟踪、价格影响或外部事件证据关联起来。",
+            "The seed transaction and token transfer confirm the Ethereum release. External technical analyses identify the violated invariant as cross-chain burn/release consistency under a 1-of-1 DVN trust model.": "核心交易和代币转移确认了 Ethereum 侧资产释放。外部技术分析把被违反的不变量定位为 1-of-1 验证网络信任模型下的跨链销毁/释放一致性。",
+            "The report must not be publishable until deterministic evidence exists.": "在缺少确定性证据前，报告不能发布为确定性结论。",
+            "This high finding is intentionally backed by weak evidence.": "该高危结论当前只绑定弱证据，用于验证质量门禁。",
+            "Root cause is derived from case-level RCA worker output.": "根因来自 case 级 RCA worker 输出。",
+            "Finding generated from structured worker output and bound evidence.": "该结论来自结构化 worker 输出，并已绑定证据。",
+        }
+        for source, target in replacements.items():
+            text = text.replace(source, target)
+        return text

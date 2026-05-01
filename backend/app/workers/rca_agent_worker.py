@@ -32,13 +32,13 @@ class RCAAgentWorker:
                     FindingService(self.db).create_finding(
                         case_id,
                         FindingCreate(
-                            title="Address seed did not produce a transaction scope",
+                            title="地址入口未形成交易范围",
                             finding_type="evidence_boundary",
                             severity="info",
                             confidence="partial",
-                            claim="The address seed was recorded, but no transaction list, receipt log, or fund-flow evidence was collected for this case.",
-                            rationale="Address-based RCA requires an explorer txlist API key or a concrete seed transaction. The current public RPC fallback can verify the network, but it cannot enumerate address history.",
-                            falsification="Provide a seed transaction hash or configure the network explorer API key, then rerun discovery and TxAnalyzer.",
+                            claim="地址入口已记录，但本 case 还没有采集到交易列表、交易收据日志或资金流证据。",
+                            rationale="地址型根因分析需要区块浏览器交易列表 API key，或至少一笔具体的核心交易。当前公共 RPC fallback 可以验证网络，但不能枚举地址历史。",
+                            falsification="补充核心交易哈希，或配置该网络的区块浏览器 API key，然后重新运行 discovery 和 TxAnalyzer。",
                             evidence_ids=deterministic[:5],
                             requires_reviewer=True,
                             created_by=self.name,
@@ -48,13 +48,13 @@ class RCAAgentWorker:
                     FindingService(self.db).create_finding(
                         case_id,
                         FindingCreate(
-                            title="Evidence-backed RCA draft requires reviewer analysis",
+                            title="基于证据的根因草稿需要人工复核",
                             finding_type="data_quality",
                             severity="info",
                             confidence="medium",
-                            claim="The system collected evidence but did not identify a specialized high-risk RCA finding automatically.",
-                            rationale="This local RCA worker avoids unsupported conclusions when only generic evidence is available.",
-                            falsification="Run ACL/Safe/FundFlow modules with complete artifacts to raise confidence.",
+                            claim="系统已采集 evidence，但没有自动识别出专门的高风险根因结论。",
+                            rationale="当只有通用证据可用时，本地 RCA worker 会避免输出缺少支撑的强结论。",
+                            falsification="补齐工件后重新运行 ACL、Safe 和 FundFlow 模块，以提高结论置信度。",
                             evidence_ids=deterministic[:5],
                             requires_reviewer=True,
                             created_by=self.name,
@@ -88,20 +88,20 @@ class RCAAgentWorker:
 
     def _root_cause(self, findings) -> str:
         if any(f.finding_type == "evidence_boundary" for f in findings):
-            return "Address seed did not produce a transaction scope; no attack root cause is established from the current evidence."
+            return "地址入口未形成交易范围；当前证据不能建立攻击根因。"
         if any(f.finding_type == "revert_collateralized_position_solvency_check_missing" for f in findings):
-            return "Revert Finance evidence indicates a missing solvency constraint in the staking/management path allowed collateralized LP NFT liquidity to be withdrawn while debt remained outstanding."
+            return "Revert Finance 证据显示，质押/管理路径缺少偿付约束，导致带债 LP NFT 的底层流动性仍可被移出。"
         if any(f.finding_type == "scallop_deprecated_reward_contract" for f in findings):
-            return "Scallop incident evidence points to a deprecated Sui rewards contract path that allowed abnormal sSUI spool reward redemption."
+            return "Scallop 事件证据指向废弃 Sui 奖励合约路径，该路径允许异常领取 sSUI spool 奖励。"
         if any(f.finding_type == "purrlend_unbacked_mint_control_failure" for f in findings):
-            return "Purrlend MegaETH evidence indicates an unbacked mint cap / borrow control failure enabled the attacker to extract real assets."
+            return "Purrlend MegaETH 证据显示，未支持铸造额度与借款控制失效，使攻击者能够提取真实资产。"
         if any(f.finding_type == "access_control" for f in findings):
-            return "Evidence indicates an access-control authorization path is central to the incident; reviewer confirmation is required before publication."
+            return "证据显示访问控制授权路径与事件核心相关；发布前需要 reviewer 确认。"
         if any(f.finding_type == "multisig" for f in findings):
-            return "Evidence indicates a multisig execution path is relevant; signer attribution requires reviewer validation."
+            return "证据显示多签执行路径相关；签名者归因需要 reviewer 验证。"
         if any(f.finding_type == "fund_flow" for f in findings):
-            return "Evidence confirms asset movement only; no exploit root cause is established without permission, source, trace, price-impact, or incident correlation."
-        return "No high-confidence root cause has been established from available evidence."
+            return "证据目前只确认资产移动；如果没有权限、源码、调用跟踪、价格影响或事件关联证据，不能建立攻击根因。"
+        return "现有证据尚未建立高置信度根因。"
 
     def _attack_type(self, findings) -> str | None:
         if any(f.finding_type == "evidence_boundary" for f in findings):

@@ -75,14 +75,16 @@ High/Critical finding 必须绑定 deterministic evidence。当前 deterministic
 
 ### 4.2 报告质量面板
 
-生成报告后，`Reports` tab 会同时显示：
+生成报告后，`Reports` tab 会同时显示中文化质量面板：
 
-- `Quality Score`：从 100 开始，blocking issue 每项扣 30，warning 每项扣 5。
-- `Blocking` / `Warnings`：发布前必须处理 blocking issue；warning 可作为补证或改写优先级。
-- `Renderer` / `Report Type`：确认报告是否使用了正确的 attack family 或预分析降级结构。
-- `Claims Preview`：只读展示报告的核心 claim、claim type、confidence 和 evidence 数量。
+- `质量分`：从 100 开始，阻断项每项扣 30，提醒每项扣 5。
+- `阻断项` / `提醒`：发布前必须处理阻断项；提醒可作为补证或改写优先级。
+- `分析类型` / `报告类型`：确认报告是否使用了正确的攻击类型或预分析降级结构。
+- `结论预览`：只读展示报告的核心结论、结论类型、置信度和证据数量。
 
-如果质量面板显示旧报告缺少 quality artifact，应重新点击 `Draft Report` 生成新版。`Publish` 会执行 QA Gate；High/Critical finding 缺 deterministic evidence、完整 RCA 缺交易范围、root cause claim 无 evidence、普通 native transfer 被写成攻击等问题会被阻断。
+如果质量面板显示旧报告缺少 quality artifact，应重新点击 `生成报告草稿` 生成新版。`Publish` 会执行 QA Gate；高危/严重 finding 缺 deterministic evidence、完整根因分析缺交易范围、根因结论无 evidence、普通 native transfer 被写成攻击等问题会被阻断。
+
+报告正文、图例说明和 PDF 导出应尽量保持全中文；交易哈希、合约名、函数名、事件名、网络名和 artifact key 属于技术对象，可以保留原始写法以保证可追溯性。
 
 ### 5. Approve / Reject Finding
 
@@ -97,10 +99,10 @@ pending 或 rejected finding 不应作为 published 报告的确定性结论。
 
 在 `Reports` tab：
 
-1. 点击 `Draft Report` 生成 Markdown canonical report。
-2. 点击 `Export PDF` 生成派生 PDF artifact。
-3. 等待状态变成 `success`。
-4. 点击 `Download PDF`。
+1. 点击 `生成报告草稿` 生成 canonical Markdown report。
+2. 点击 `生成 PDF` 生成派生 PDF artifact。
+3. 等待状态变成 `成功`。
+4. 点击 `下载 PDF`。
 
 PDF 与页面预览共用同一份 report content 和 `diagram_specs`，避免图例分叉。
 
@@ -198,14 +200,16 @@ These reports should not include attack-stage sections such as “fake collatera
 
 ### 4.2 Report Quality Panel
 
-After generating a report, the `Reports` tab shows:
+After generating a report, the `Reports` tab shows a localized quality panel:
 
-- `Quality Score`: starts at 100; each blocking issue subtracts 30 and each warning subtracts 5.
-- `Blocking` / `Warnings`: blocking issues must be resolved before publish; warnings guide evidence collection or wording improvements.
-- `Renderer` / `Report Type`: confirms whether the report used the correct attack family or a pre-analysis downgrade structure.
-- `Claims Preview`: read-only view of core claims, claim type, confidence, and evidence count.
+- `质量分` / quality score: starts at 100; each blocking issue subtracts 30 and each warning subtracts 5.
+- `阻断项` / `提醒`: blocking issues must be resolved before publish; warnings guide evidence collection or wording improvements.
+- `分析类型` / `报告类型`: confirms whether the report used the correct attack family or a pre-analysis downgrade structure.
+- `结论预览`: read-only view of core claims, claim type, confidence, and evidence count.
 
-If the quality panel says an older report has no quality artifact, click `Draft Report` again to generate a new version. `Publish` runs the QA Gate; missing deterministic evidence for High/Critical findings, full RCA without transaction scope, root-cause claims without evidence, or plain native transfers written as attacks are blocked.
+If the quality panel says an older report has no quality artifact, click `生成报告草稿` again to generate a new version. `Publish` runs the QA Gate; missing deterministic evidence for High/Critical findings, full RCA without transaction scope, root-cause claims without evidence, or plain native transfers written as attacks are blocked.
+
+Report body text, diagram notes, and PDF exports should be Chinese-first. Transaction hashes, contract names, function names, event names, network names, and artifact keys may keep their original technical spelling for traceability.
 
 ### 5. Approve / Reject Findings
 
@@ -220,10 +224,10 @@ Pending or rejected findings should not be used as deterministic conclusions in 
 
 In the `Reports` tab:
 
-1. Click `Draft Report` to generate the canonical Markdown report.
-2. Click `Export PDF` to generate the derived PDF artifact.
-3. Wait until the status becomes `success`.
-4. Click `Download PDF`.
+1. Click `生成报告草稿` to generate the canonical Markdown report.
+2. Click `生成 PDF` to generate the derived PDF artifact.
+3. Wait until the status becomes `成功`.
+4. Click `下载 PDF`.
 
 PDF export and page preview reuse the same report content and `diagram_specs`, so diagrams stay consistent.
 

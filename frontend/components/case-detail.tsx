@@ -16,12 +16,12 @@ const caseTabs: CaseTab[] = ["overview", "diagrams", "evidence", "findings", "re
 const PAGE_SIZE = 50;
 const REPORT_PAGE_SIZE = 20;
 const tabLabels: Record<CaseTab, string> = {
-  overview: "Overview",
-  diagrams: "Diagrams",
-  evidence: "Evidence",
-  findings: "Findings",
-  reports: "Reports",
-  jobs: "Jobs"
+  overview: "概览",
+  diagrams: "图例",
+  evidence: "证据",
+  findings: "结论",
+  reports: "报告",
+  jobs: "任务"
 };
 
 export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string; initialTab?: CaseTab }) {
@@ -209,33 +209,33 @@ export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string
         <div className="band">
           <div className="band-header">
             <div>
-              <Link href="/">← Dashboard</Link>
+              <Link href="/">← 返回工作台</Link>
               <div className="band-title">{item?.title || caseId}</div>
               <div className="mono">{caseId}</div>
             </div>
             <div className="button-row">
               <button className="btn" disabled={refreshing} onClick={() => refreshCurrentTab()}>
-                <RefreshCw size={16} /> {refreshing ? "Refreshing" : "Refresh"}
+                <RefreshCw size={16} /> {refreshing ? "刷新中" : "刷新"}
               </button>
-              <button className="btn primary" disabled={!canRun || runCase.isPending} title="Run the full worker pipeline for this case" onClick={() => runCase.mutate()}>
-                <Play size={16} /> {runCase.isPending ? "Running" : runLabel}
+              <button className="btn primary" disabled={!canRun || runCase.isPending} title="运行该 case 的完整自动分析链路" onClick={() => runCase.mutate()}>
+                <Play size={16} /> {runCase.isPending ? "运行中" : runLabel}
               </button>
               <button className="btn" disabled={!canRun || createReport.isPending} onClick={() => createReport.mutate()}>
-                <FileText size={16} /> Draft Report
+                <FileText size={16} /> 生成报告草稿
               </button>
             </div>
           </div>
           <div className="band-body grid-3">
             <div className="metric">
-              <div className="metric-label">Status</div>
+              <div className="metric-label">状态</div>
               <StatusBadge value={item?.status} />
             </div>
             <div className="metric">
-              <div className="metric-label">Severity</div>
+              <div className="metric-label">严重性</div>
               <StatusBadge value={item?.severity} />
             </div>
             <div className="metric">
-              <div className="metric-label">Confidence</div>
+              <div className="metric-label">置信度</div>
               <StatusBadge value={item?.confidence} />
             </div>
           </div>
@@ -319,9 +319,9 @@ export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string
 
 function itemRunLabel(status?: string) {
   if (!status || status === "CREATED" || status === "FAILED" || status === "CANCELLED") {
-    return "Run Analysis";
+    return "运行分析";
   }
-  return "Re-run Analysis";
+  return "重新运行";
 }
 
 function Overview({ item, summary }: { item?: CaseRecord; summary?: CaseDetailSummary }) {
@@ -329,39 +329,39 @@ function Overview({ item, summary }: { item?: CaseRecord; summary?: CaseDetailSu
     <div className="grid-2">
       <div className="form-grid">
         <div className="metric">
-          <div className="metric-label">Seed</div>
+          <div className="metric-label">入口</div>
           <div className="mono">
             {item?.seed_type}: {item?.seed_value}
           </div>
         </div>
         <div className="metric">
-          <div className="metric-label">Root Cause</div>
-          <div>{item?.root_cause_one_liner || "pending"}</div>
+          <div className="metric-label">根因</div>
+          <div>{item?.root_cause_one_liner || "待生成"}</div>
         </div>
       </div>
       <div className="grid-3">
         <div className="metric">
-          <div className="metric-label">Transactions</div>
+          <div className="metric-label">交易</div>
           <div className="metric-value">{summary?.transaction_count ?? "-"}</div>
         </div>
         <div className="metric">
-          <div className="metric-label">Evidence</div>
+          <div className="metric-label">证据</div>
           <div className="metric-value">{summary?.evidence_count ?? "-"}</div>
         </div>
         <div className="metric">
-          <div className="metric-label">Findings</div>
+          <div className="metric-label">结论</div>
           <div className="metric-value">{summary?.finding_count ?? "-"}</div>
         </div>
         <div className="metric">
-          <div className="metric-label">Jobs</div>
+          <div className="metric-label">任务</div>
           <div className="metric-value">{summary?.job_count ?? "-"}</div>
         </div>
         <div className="metric">
-          <div className="metric-label">Diagrams</div>
+          <div className="metric-label">图例</div>
           <div className="metric-value">{summary?.diagram_count ?? "-"}</div>
         </div>
         <div className="metric">
-          <div className="metric-label">Reports</div>
+          <div className="metric-label">报告</div>
           <div className="metric-value">{summary?.report_count ?? "-"}</div>
         </div>
       </div>
@@ -385,7 +385,7 @@ function DiagramsPanel({
   onTimelinePage: (offset: number) => void;
 }) {
   if (loading) {
-    return <LoadingMetric label="Diagrams" />;
+    return <LoadingMetric label="图例" />;
   }
   const ordered = ["attack_flow", "fund_flow", "evidence_map"];
   const diagramRows = [...diagrams].sort((a, b) => ordered.indexOf(a.diagram_type) - ordered.indexOf(b.diagram_type));
@@ -393,8 +393,8 @@ function DiagramsPanel({
     return (
       <div className="form-grid">
         <div className="metric">
-          <div className="metric-label">Diagrams</div>
-          <div>No diagrams</div>
+          <div className="metric-label">图例</div>
+          <div>暂无图例</div>
         </div>
         <TimelineTable timeline={timeline} />
         <Pager offset={timelineOffset} total={timelineTotal} pageSize={PAGE_SIZE} onPage={onTimelinePage} />
@@ -406,7 +406,7 @@ function DiagramsPanel({
       {diagramRows.map((diagram) => (
         <ReportPreview
           key={diagram.id}
-          content={`## ${diagram.title}\n\n- Confidence: \`${diagram.confidence}\`\n- Evidence: \`${diagram.evidence_ids.length}\`\n\n\`\`\`mermaid\n${diagram.mermaid_source}\n\`\`\``}
+          content={`## ${diagram.title}\n\n- 置信度: \`${diagram.confidence}\`\n- 证据: \`${diagram.evidence_ids.length}\`\n\n\`\`\`mermaid\n${diagram.mermaid_source}\n\`\`\``}
         />
       ))}
       {timeline.length > 1 ? (
@@ -425,11 +425,11 @@ function TimelineTable({ timeline }: { timeline: TimelineItem[] }) {
         <table>
           <thead>
             <tr>
-              <th>Phase</th>
+              <th>阶段</th>
               <th>Tx</th>
-              <th>Method</th>
-              <th>Block</th>
-              <th>Evidence</th>
+              <th>方法</th>
+              <th>区块</th>
+              <th>证据</th>
             </tr>
           </thead>
           <tbody>
@@ -439,7 +439,7 @@ function TimelineTable({ timeline }: { timeline: TimelineItem[] }) {
                   <StatusBadge value={item.phase} />
                 </td>
                 <td className="mono">{item.tx_hash}</td>
-                <td>{item.method || "unknown"}</td>
+                <td>{item.method || "未知"}</td>
                 <td>{item.block_number || "-"}</td>
                 <td>{item.evidence_count}</td>
               </tr>
@@ -466,7 +466,7 @@ function EvidencePanel({
   onPage: (offset: number) => void;
 }) {
   if (loading) {
-    return <LoadingMetric label="Evidence" />;
+    return <LoadingMetric label="证据" />;
   }
   return (
     <div className="form-grid">
@@ -475,10 +475,10 @@ function EvidencePanel({
           <table>
             <thead>
               <tr>
-                <th>Type</th>
-                <th>Claim</th>
-                <th>Producer</th>
-                <th>Confidence</th>
+                <th>类型</th>
+                <th>结论键</th>
+                <th>采集模块</th>
+                <th>置信度</th>
               </tr>
             </thead>
             <tbody>
@@ -520,7 +520,7 @@ function FindingsPanel({
   onPage: (offset: number) => void;
 }) {
   if (loading) {
-    return <LoadingMetric label="Findings" />;
+    return <LoadingMetric label="结论" />;
   }
   return (
     <div className="form-grid">
@@ -528,12 +528,12 @@ function FindingsPanel({
         <table>
           <thead>
             <tr>
-              <th>Finding</th>
-              <th>Severity</th>
-              <th>Confidence</th>
-              <th>Evidence</th>
-              <th>Review</th>
-              <th>Review Decision</th>
+              <th>结论</th>
+              <th>严重性</th>
+              <th>置信度</th>
+              <th>证据</th>
+              <th>审核</th>
+              <th>复核操作</th>
             </tr>
           </thead>
           <tbody>
@@ -557,10 +557,10 @@ function FindingsPanel({
                   {canReview ? (
                     <div className="button-row">
                       <button className="btn" disabled={item.reviewer_status === "approved"} onClick={() => onReview(item.id, "approved")}>
-                        <Check size={16} /> Approve
+                        <Check size={16} /> 通过
                       </button>
                       <button className="btn danger" disabled={item.reviewer_status === "rejected"} onClick={() => onReview(item.id, "rejected")}>
-                        <X size={16} /> Reject
+                        <X size={16} /> 拒绝
                       </button>
                     </div>
                   ) : (
@@ -612,17 +612,17 @@ function ReportsPanel({
 }) {
   const pdf = exports.find((item) => item.format === "pdf");
   if (loading) {
-    return <LoadingMetric label="Reports" />;
+    return <LoadingMetric label="报告" />;
   }
   return (
     <div className="grid-2">
       <div className="form-grid">
         <div className="button-row">
           <button className="btn" disabled={!detail || pdfPending} onClick={onCreatePdf}>
-            <FileText size={16} /> Export PDF
+            <FileText size={16} /> 生成 PDF
           </button>
           <button className="btn" disabled={!pdf || pdf.status !== "success"} onClick={() => pdf?.id && onDownload(pdf.id)}>
-            <Download size={16} /> Download PDF
+            <Download size={16} /> 下载 PDF
           </button>
           {pdf ? <StatusBadge value={pdf.status} /> : null}
         </div>
@@ -633,10 +633,10 @@ function ReportsPanel({
           <table>
             <thead>
               <tr>
-                <th>Version</th>
-                <th>Format</th>
-                <th>Status</th>
-                <th>Artifact</th>
+                <th>版本</th>
+                <th>格式</th>
+                <th>状态</th>
+                <th>工件</th>
               </tr>
             </thead>
             <tbody>
@@ -685,37 +685,37 @@ function ReportQualitySummary({
     <div className="form-grid">
       <div className="grid-3">
         <div className="metric">
-          <div className="metric-label">Quality Score</div>
+          <div className="metric-label">质量分</div>
           <div className="metric-value">{loading && score === undefined ? "..." : score ?? "-"}</div>
         </div>
         <div className="metric">
-          <div className="metric-label">Blocking</div>
+          <div className="metric-label">阻断项</div>
           <div className="metric-value">{blockingCount ?? "-"}</div>
         </div>
         <div className="metric">
-          <div className="metric-label">Warnings</div>
+          <div className="metric-label">提醒</div>
           <div className="metric-value">{warningCount ?? "-"}</div>
         </div>
         <div className="metric">
-          <div className="metric-label">Renderer</div>
-          <div>{rendererFamily}</div>
+          <div className="metric-label">分析类型</div>
+          <div>{rendererLabel(rendererFamily)}</div>
         </div>
         <div className="metric">
-          <div className="metric-label">Claims</div>
+          <div className="metric-label">结论数</div>
           <div className="metric-value">{claimCount ?? "-"}</div>
         </div>
         <div className="metric">
-          <div className="metric-label">Report Type</div>
-          <div>{metadataText(metadata, "report_type") || metadataText(claims?.metadata ?? {}, "report_type") || "-"}</div>
+          <div className="metric-label">报告类型</div>
+          <div>{reportTypeLabel(metadataText(metadata, "report_type") || metadataText(claims?.metadata ?? {}, "report_type") || "-")}</div>
         </div>
       </div>
-      {error ? <div className="badge high">Quality artifact unavailable: {shortError(error)}</div> : null}
+      {error ? <div className="badge high">质量工件不可用：{shortError(error)}</div> : null}
       {quality?.blocking_issues.length ? (
-        <IssueList title="Blocking Issues" issues={quality.blocking_issues} />
+        <IssueList title="阻断项" issues={quality.blocking_issues} />
       ) : quality ? (
-        <div className="badge success">No blocking quality issue</div>
+        <div className="badge success">没有阻断性质量问题</div>
       ) : null}
-      {quality?.warnings.length ? <IssueList title="Warnings" issues={quality.warnings.slice(0, 6)} /> : null}
+      {quality?.warnings.length ? <IssueList title="提醒" issues={quality.warnings.slice(0, 6)} /> : null}
     </div>
   );
 }
@@ -727,9 +727,9 @@ function IssueList({ title, issues }: { title: string; issues: ReportQualityResu
         <thead>
           <tr>
             <th>{title}</th>
-            <th>Rule</th>
-            <th>Claim</th>
-            <th>Evidence</th>
+            <th>规则</th>
+            <th>结论</th>
+            <th>证据</th>
           </tr>
         </thead>
         <tbody>
@@ -751,8 +751,8 @@ function ClaimsPreview({ claims }: { claims?: ClaimGraph }) {
   if (!claims) {
     return (
       <div className="metric">
-        <div className="metric-label">Claims Preview</div>
-        <div>Generate a new report to view claim graph and QA artifacts.</div>
+        <div className="metric-label">结论预览</div>
+        <div>生成新版报告后可查看结论图和质量工件。</div>
       </div>
     );
   }
@@ -761,10 +761,10 @@ function ClaimsPreview({ claims }: { claims?: ClaimGraph }) {
       <table>
         <thead>
           <tr>
-            <th>Claim</th>
-            <th>Type</th>
-            <th>Confidence</th>
-            <th>Evidence</th>
+            <th>结论</th>
+            <th>类型</th>
+            <th>置信度</th>
+            <th>证据</th>
           </tr>
         </thead>
         <tbody>
@@ -774,7 +774,7 @@ function ClaimsPreview({ claims }: { claims?: ClaimGraph }) {
                 <strong>{claim.claim_id}</strong>
                 <div>{claim.text}</div>
               </td>
-              <td>{claim.claim_type}</td>
+              <td>{claimTypeLabel(claim.claim_type)}</td>
               <td>
                 <StatusBadge value={claim.confidence} />
               </td>
@@ -783,7 +783,7 @@ function ClaimsPreview({ claims }: { claims?: ClaimGraph }) {
           ))}
           {!claims.claims.length ? (
             <tr>
-              <td colSpan={4}>No claims</td>
+              <td colSpan={4}>暂无结论</td>
             </tr>
           ) : null}
         </tbody>
@@ -808,7 +808,7 @@ function JobsPanel({
   onPage: (offset: number) => void;
 }) {
   if (loading) {
-    return <LoadingMetric label="Jobs" />;
+    return <LoadingMetric label="任务" />;
   }
   return (
     <div className="form-grid">
@@ -816,11 +816,11 @@ function JobsPanel({
         <table>
           <thead>
             <tr>
-              <th>Workflow</th>
-              <th>Mode</th>
-              <th>Status</th>
-              <th>Started</th>
-              <th>Error</th>
+              <th>工作流</th>
+              <th>模式</th>
+              <th>状态</th>
+              <th>开始时间</th>
+              <th>错误</th>
             </tr>
           </thead>
           <tbody>
@@ -837,7 +837,7 @@ function JobsPanel({
             ))}
             {!workflowRuns.length ? (
               <tr>
-                <td colSpan={5}>No workflow runs</td>
+                <td colSpan={5}>暂无工作流运行记录</td>
               </tr>
             ) : null}
           </tbody>
@@ -847,10 +847,10 @@ function JobsPanel({
         <table>
           <thead>
             <tr>
-              <th>Job</th>
-              <th>Status</th>
-              <th>Started</th>
-              <th>Error</th>
+              <th>任务</th>
+              <th>状态</th>
+              <th>开始时间</th>
+              <th>错误</th>
             </tr>
           </thead>
           <tbody>
@@ -878,13 +878,13 @@ function Pager({ offset, total, pageSize, onPage }: { offset: number; total: num
   return (
     <div className="button-row">
       <button className="btn" disabled={offset <= 0} onClick={() => onPage(Math.max(0, offset - pageSize))}>
-        Previous
+        上一页
       </button>
       <span className="mono">
         {from}-{to} / {total}
       </span>
       <button className="btn" disabled={offset + pageSize >= total} onClick={() => onPage(offset + pageSize)}>
-        Next
+        下一页
       </button>
     </div>
   );
@@ -894,7 +894,7 @@ function LoadingMetric({ label }: { label: string }) {
   return (
     <div className="metric">
       <div className="metric-label">{label}</div>
-      <div>Loading...</div>
+      <div>加载中...</div>
     </div>
   );
 }
@@ -921,4 +921,42 @@ function numberMetadata(metadata: Record<string, unknown>, key: string) {
 
 function shortError(value: string) {
   return value.length > 160 ? `${value.slice(0, 160)}...` : value;
+}
+
+function rendererLabel(value: string) {
+  const labels: Record<string, string> = {
+    amm_rounding_liquidity: "自动做市商舍入与流动性会计缺陷",
+    collateral_solvency_bypass: "抵押物偿付能力检查绕过",
+    cross_contract_reentrancy: "跨合约重入",
+    oracle_price_manipulation: "预言机价格操纵",
+    access_control_or_forwarder: "访问控制或可信转发器问题",
+    reward_accounting: "奖励会计缺陷",
+    bridge_message_verification: "跨链消息验证失效",
+    generic_fallback: "通用证据约束分析",
+    address_scope_boundary: "地址线索边界分析"
+  };
+  return labels[value] || value;
+}
+
+function reportTypeLabel(value: string) {
+  const labels: Record<string, string> = {
+    attack_rca: "攻击事件根因分析",
+    address_boundary: "地址线索预分析",
+    external_event_preanalysis: "外部事件预分析",
+    transaction_preanalysis: "链上交易预分析"
+  };
+  return labels[value] || value;
+}
+
+function claimTypeLabel(value: string) {
+  const labels: Record<string, string> = {
+    fact: "事实",
+    inference: "推断",
+    hypothesis: "假设",
+    root_cause: "根因",
+    loss: "损失",
+    boundary: "边界",
+    remediation: "修复建议"
+  };
+  return labels[value] || value;
 }

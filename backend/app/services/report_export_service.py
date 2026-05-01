@@ -92,7 +92,7 @@ class ReportExportService:
                 markdown = html.escape(str(markdown))
             diagrams = DiagramService(self.db, self.object_store).generate_for_case(report.case_id, report.id, created_by="report_export_worker")
             markdown = self._sync_diagram_section(markdown, DiagramService(self.db, self.object_store).markdown_for_diagrams(diagrams))
-            html_report = self._markdown_to_html(markdown, report_title=f"Report v{report.version}")
+            html_report = self._markdown_to_html(markdown, report_title=f"报告 v{report.version}")
             pdf_bytes, metadata = self._render_pdf(html_report)
             object_key = f"cases/{report.case_id}/reports/report_v{report.version}.pdf"
             object_uri = self.object_store.put_bytes(pdf_bytes, object_key, "application/pdf")
@@ -125,14 +125,15 @@ class ReportExportService:
             db.close()
 
     def _sync_diagram_section(self, markdown: str, diagram_markdown: str) -> str:
-        replacement = f"## 4. 数据流图\n\n{diagram_markdown}\n\n"
-        match = re.search(r"^## 4\. 数据流图\s*$", markdown, flags=re.MULTILINE)
+        match = re.search(r"^## 5\. (攻击路径与数据流图|数据流图与证据图)\s*$", markdown, flags=re.MULTILINE)
+        heading = match.group(0).removeprefix("## ").strip() if match else "5. 攻击路径与数据流图"
+        replacement = f"## {heading}\n\n{diagram_markdown}\n\n"
         if not match:
-            anchor = re.search(r"^## 5\. 根因分析\s*$", markdown, flags=re.MULTILINE)
+            anchor = re.search(r"^## 6\. ", markdown, flags=re.MULTILINE)
             if anchor:
                 return f"{markdown[:anchor.start()]}{replacement}{markdown[anchor.start():]}"
             return f"{markdown.rstrip()}\n\n{replacement}"
-        next_section = re.search(r"^## 5\. 根因分析\s*$", markdown[match.end():], flags=re.MULTILINE)
+        next_section = re.search(r"^## 6\. ", markdown[match.end():], flags=re.MULTILINE)
         if not next_section:
             return f"{markdown[:match.start()]}{replacement}"
         end = match.end() + next_section.start()

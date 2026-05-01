@@ -82,13 +82,13 @@ class FundFlowWorker:
             if evidence_ids:
                 existing = next((item for item in FindingService(self.db).list_for_case(case_id) if item.finding_type == "fund_flow"), None)
                 finding_payload = FindingCreate(
-                    title="Asset movement evidence observed",
+                    title="已观察到资产移动证据",
                     finding_type="fund_flow",
                     severity="info",
                     confidence="high",
-                    claim=f"Detected {len(edges) or len(evidence_ids)} native/token transfer evidence item(s).",
-                    rationale="Transfer logs and native value movement are deterministic fund-flow evidence, but they do not prove an exploit, root cause, or loss by themselves.",
-                    falsification="Correlate the transfer with exploit-specific receipt logs, permission changes, source code, trace, price impact, or external incident evidence before treating it as a security finding.",
+                    claim=f"检测到 {len(edges) or len(evidence_ids)} 条原生资产或代币转移证据。",
+                    rationale="Transfer 日志和原生资产移动属于确定性资金流证据，但单独不能证明存在攻击、漏洞根因或协议损失。",
+                    falsification="在把资金移动作为安全结论前，需要把它与攻击特异性的 receipt 日志、权限变化、源码、调用跟踪、价格影响或外部事件证据关联起来。",
                     evidence_ids=evidence_ids,
                     requires_reviewer=True,
                     created_by=self.name,

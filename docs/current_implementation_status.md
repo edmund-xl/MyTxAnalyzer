@@ -58,17 +58,19 @@ RCA Workbench 与 MegaETH Pentest Workbench 已明确隔离：
 - Refresh 只刷新当前 tab 需要的数据，以及 case metadata/summary。
 - Dashboard case list、Evidence、Findings、Reports、Jobs 和 Timeline 已分页加载，不再随历史数据线性扩大首屏 payload。
 - Jobs tab 同时展示 workflow run 和 worker job run，便于定位一次 run 的失败位置。
-- Reports tab 支持 Markdown preview、Mermaid 渲染、PDF export status 和 PDF download，并展示 quality score、blocking/warning issue、renderer family、claim count 和 Claims preview。
+- Reports tab 支持 Markdown preview、Mermaid 渲染、PDF export status 和 PDF download，并展示中文化 quality score、blocking/warning issue、renderer family、claim count 和 Claims preview。
 - Findings review action 第一版只保留 approve/reject，并限制 reviewer/admin 角色使用。
 
 ### 报告与图例输出
 
 当前报告按 report type 生成不同结构：
 
-- 完整攻击 RCA：Executive Summary、结论与证据等级、事件范围、阶段时间线、实体角色、攻击路径与图、根因、财务影响、修复建议、复现验证、方法论边界、附录。
-- 地址线索预分析：说明当前可确认范围、Provider/Explorer 能力边界、不能确认的内容、进入正式 RCA 的前置条件，并固定包含数据流图/资金流图/证据图和 Evidence/Job 附录。
-- 外部事件预分析：说明 DefiLlama / 外部情报记录、外部口径与本地证据边界、当前不能确认的内容、进入正式 RCA 的前置条件，并固定包含数据流图/资金流图/证据图。
-- 链上交易预分析：说明交易基本信息、调用与资金移动、当前 evidence、不能确认的攻击结论，并固定包含数据流图/资金流图/证据图和后续分析建议。
+- 完整攻击根因分析：执行摘要、结论与证据等级、事件范围、阶段时间线、实体角色、攻击路径与图、根因、财务影响、修复建议、复现验证、方法论边界、附录。
+- 地址线索预分析：说明当前可确认范围、链上数据服务能力边界、不能确认的内容、进入正式根因分析的前置条件，并固定包含数据流图/资金流图/证据图和证据/任务附录。
+- 外部事件预分析：说明 DefiLlama / 外部情报记录、外部口径与本地证据边界、当前不能确认的内容、进入正式根因分析的前置条件，并固定包含数据流图/资金流图/证据图。
+- 链上交易预分析：说明交易基本信息、调用与资金移动、当前证据、不能确认的攻击结论，并固定包含数据流图/资金流图/证据图和后续分析建议。
+
+报告正文、图例说明、质量摘要和前端 Reports tab 的读者可见标签已改为中文优先。内部 API 枚举、交易哈希、合约名、函数名、事件名和 artifact key 仍保留原始技术值，避免破坏可追溯性。
 
 旧版通用章节仍作为历史报告兼容对象：
 
@@ -243,17 +245,19 @@ The RCA Workbench is separated from the MegaETH Pentest Workbench:
 - Refresh reloads only the current tab plus case metadata/summary.
 - Dashboard case list, Evidence, Findings, Reports, Jobs, and Timeline are paginated so first-page payload does not grow linearly with history.
 - The Jobs tab shows both workflow runs and worker job runs to locate the failed step in a specific run.
-- Reports tab supports Markdown preview, Mermaid rendering, PDF export status, and PDF download, and now shows quality score, blocking/warning issues, renderer family, claim count, and a Claims preview.
+- Reports tab supports Markdown preview, Mermaid rendering, PDF export status, and PDF download, and now shows localized quality score, blocking/warning issues, renderer family, claim count, and a Claims preview.
 - Findings review actions are intentionally limited to approve/reject for reviewer/admin roles in the first version.
 
 ### Report And Diagram Output
 
 Reports now use different structures by report type:
 
-- Full attack RCA: Executive Summary, conclusion/evidence level, incident scope, phase timeline, entity roles, attack path and diagrams, root cause, financial impact, remediation, reproduction/verification, methodology boundary, and appendix.
-- Address lead pre-analysis: confirmed scope, Provider/Explorer capability boundary, claims that cannot be confirmed yet, prerequisites for a full RCA, fixed data/fund/evidence diagrams, and Evidence/Job appendix.
+- Full attack RCA: Chinese executive summary, conclusion/evidence level, incident scope, phase timeline, entity roles, attack path and diagrams, root cause, financial impact, remediation, reproduction/verification, methodology boundary, and appendix.
+- Address lead pre-analysis: confirmed scope, provider/explorer capability boundary, claims that cannot be confirmed yet, prerequisites for a full RCA, fixed data/fund/evidence diagrams, and evidence/job appendix.
 - External incident pre-analysis: DefiLlama / external intelligence record, external-vs-local evidence boundary, unconfirmed conclusions, prerequisites for a full RCA, and fixed data/fund/evidence diagrams.
 - On-chain transaction pre-analysis: transaction facts, call and value movement, current evidence, attack conclusions that cannot be confirmed, fixed data/fund/evidence diagrams, and next analysis steps.
+
+Reader-facing report content, diagram notes, quality summaries, and frontend Reports-tab labels are Chinese-first. Internal API enums, transaction hashes, contract names, function names, event names, and artifact keys keep their original technical values for traceability.
 
 The previous generic section set remains for historical report compatibility:
 

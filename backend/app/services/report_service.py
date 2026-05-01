@@ -167,37 +167,37 @@ class ReportService:
 
         if report_type == "address_boundary":
             bodies = [
-                ("TL;DR", self._address_boundary_tldr(case, evidence)),
+                ("摘要", self._address_boundary_tldr(case, evidence)),
                 ("1. 当前可确认范围", self._address_boundary_overview(case, evidence, findings)),
-                ("2. Provider / Explorer 能力边界", self._address_boundary_methodology(case, jobs, evidence)),
+                ("2. 链上数据服务能力边界", self._address_boundary_methodology(case, jobs, evidence)),
                 ("3. 当前不能确认的内容", self._address_boundary_root_cause(case, evidence, findings)),
                 ("4. 进入正式 RCA 的前置条件", self._address_boundary_next_steps(case)),
                 ("5. 数据流图与证据图", self._diagrams(diagrams)),
-                ("6. Evidence 与 Job Run 附录", self._address_boundary_appendix(evidence, jobs)),
+                ("6. 证据与任务运行附录", self._address_boundary_appendix(evidence, jobs)),
             ]
         elif report_type == "external_event_preanalysis":
             bodies = [
-                ("TL;DR", self._external_event_tldr(case, evidence)),
+                ("摘要", self._external_event_tldr(case, evidence)),
                 ("1. 当前可确认范围", self._external_event_overview(case, evidence, findings)),
                 ("2. 外部情报与本地证据边界", self._external_event_evidence_boundary(evidence)),
                 ("3. 当前不能确认的内容", self._external_event_unconfirmed()),
                 ("4. 进入正式 RCA 的前置条件", self._external_event_next_steps(case)),
                 ("5. 数据流图与证据图", self._diagrams(diagrams)),
-                ("6. Evidence 与 Job Run 附录", self._address_boundary_appendix(evidence, jobs)),
+                ("6. 证据与任务运行附录", self._address_boundary_appendix(evidence, jobs)),
             ]
         elif report_type == "transaction_preanalysis":
             bodies = [
-                ("TL;DR", self._tldr(case, timeline, evidence)),
+                ("摘要", self._tldr(case, timeline, evidence)),
                 ("1. 交易基本信息", self._transaction_basic_info(claim_graph, transactions, evidence)),
                 ("2. 调用与资金移动", self._transaction_call_and_flow(claim_graph)),
-                ("3. 当前 evidence", self._evidence_summary(evidence)),
+                ("3. 当前证据", self._evidence_summary(evidence)),
                 ("4. 不能确认的攻击结论", self._transaction_attack_boundaries(claim_graph)),
                 ("5. 数据流图与证据图", self._diagrams(diagrams)),
                 ("6. 后续分析建议", self._transaction_next_steps(case)),
             ]
         else:
             bodies = [
-                ("0. Executive Summary", self._executive_summary(case, claim_graph, transactions)),
+                ("0. 执行摘要", self._executive_summary(case, claim_graph, transactions)),
                 ("1. 结论与证据等级", self._claim_level_summary(claim_graph)),
                 ("2. 事件范围", self._scope_section(case, claim_graph, transactions)),
                 ("3. 攻击阶段时间线", self._phase_timeline(timeline)),
@@ -218,9 +218,9 @@ class ReportService:
             is_diagram_section = "图" in title
             if not evidence_ids and is_diagram_section:
                 evidence_ids = sorted({evidence_id for diagram in diagrams for evidence_id in (diagram.evidence_ids or [])})
-            if not evidence_ids and title in {"0. Executive Summary", "TL;DR"}:
+            if not evidence_ids and title in {"0. 执行摘要", "摘要"}:
                 evidence_ids = sorted({evidence_id for claim in claim_graph.claims[:5] for evidence_id in claim.support_evidence_ids})
-            boundary = report_type in {"address_boundary", "external_event_preanalysis", "transaction_preanalysis"} and not evidence_ids and title not in {"TL;DR", "5. Evidence 与 Job Run 附录", "6. Evidence 与 Job Run 附录"}
+            boundary = report_type in {"address_boundary", "external_event_preanalysis", "transaction_preanalysis"} and not evidence_ids and title not in {"摘要", "5. 证据与任务运行附录", "6. 证据与任务运行附录"}
             sections.append(
                 {
                     "title": title,
@@ -307,7 +307,7 @@ class ReportService:
 
     def _render_markdown(self, case_id: str, sections: list[dict[str, Any]], claim_graph: ClaimGraph | None = None) -> str:
         case = CaseService(self.db).get_case(case_id)
-        title = case.title or "On-chain RCA"
+        title = self._localized_text(case.title or "链上根因分析")
         report_type = (claim_graph.metadata.get("report_type") if claim_graph else None) or "attack_rca"
         if report_type == "address_boundary":
             suffix = "地址线索预分析报告"
@@ -316,7 +316,7 @@ class ReportService:
         elif report_type == "transaction_preanalysis":
             suffix = "链上交易预分析报告"
         else:
-            suffix = "攻击事件 RCA 报告"
+            suffix = "攻击事件根因分析报告"
         lines = [f"# {title} {suffix}", ""]
         for section in sections:
             lines.extend([f"## {section['title']}", "", section["body_markdown"], ""])
@@ -366,7 +366,7 @@ class ReportService:
         return "\n\n".join(
             [
                 "外部情报可以指导排查优先级，但不能替代 deterministic evidence。当前没有 seed transaction 时，以下内容只能作为线索：项目名、日期、链、损失口径、分类和技术标签。",
-                self._table(["Evidence", "Source", "Producer", "Claim", "Confidence", "Raw Path"], rows) if rows else "暂无 evidence。",
+                self._table(["证据", "来源", "采集模块", "结论键", "置信度", "原始路径"], rows) if rows else "暂无证据。",
             ]
         )
 
@@ -387,8 +387,8 @@ class ReportService:
         return self._table(
             ["前置条件", "为什么需要", "完成后动作"],
             [
-                ("Seed transaction / Sui digest", "建立交易范围和时间线", "切换入口类型为交易哈希 / Digest 后重新运行"),
-                ("官方 postmortem", "确认机制、损失口径和修复动作", "导入 external_incident_report evidence"),
+                ("入口交易 / Sui digest", "建立交易范围和时间线", "切换入口类型为交易哈希 / Digest 后重新运行"),
+                ("官方复盘", "确认机制、损失口径和修复动作", "导入 external_incident_report 证据"),
                 ("Explorer / RPC 能力", "拉取 receipt、events、trace 或 Sui transaction block", "运行 discovery、TxAnalyzer 或 Sui native parser"),
                 ("Reviewer 复核", "把外部标签转成 evidence-bound finding", "Approve / reject findings 后再 publish"),
             ],
@@ -412,29 +412,29 @@ class ReportService:
         return self._table(
             ["前置条件", "为什么需要", "完成后动作"],
             [
-                ("Seed transaction", "交易 hash 才能拉取 receipt、trace、fund-flow 和 TxAnalyzer artifact", "切换入口类型为交易哈希并重新运行"),
+                ("入口交易", "交易 hash 才能拉取 receipt、trace、fund-flow 和 TxAnalyzer artifact", "切换入口类型为交易哈希并重新运行"),
                 ("Explorer txlist API key", "地址 seed 需要 txlist 扩展交易范围", "配置对应网络 Explorer key 后重新运行 discovery"),
-                ("人工确认线索角色", "孤立地址不能直接定性为攻击者或受害合约", "在 Findings 中补充 reviewer 结论并绑定 evidence"),
+                ("人工确认线索角色", "孤立地址不能直接定性为攻击者或受害合约", "在发现项页面补充 reviewer 结论并绑定证据"),
             ],
         )
 
     def _transaction_basic_info(self, claim_graph: ClaimGraph, transactions: list, evidence: list) -> str:
         tx = transactions[0] if transactions else None
         rows = [
-            ("Tx hash", tx.tx_hash if tx else "-", "transaction_in_case_scope"),
-            ("Block", tx.block_number if tx else "-", "tx metadata"),
-            ("Timestamp", self._format_dt(tx.block_timestamp) if tx else "-", "tx metadata"),
-            ("From", tx.from_address if tx else "-", "tx metadata"),
-            ("To", tx.to_address if tx else "-", "tx metadata"),
-            ("Value wei", tx.value_wei if tx else "-", "tx metadata"),
-            ("Status", tx.status if tx else "-", "receipt"),
+            ("交易 hash", tx.tx_hash if tx else "-", "transaction_in_case_scope"),
+            ("区块", tx.block_number if tx else "-", "交易元数据"),
+            ("时间戳", self._format_dt(tx.block_timestamp) if tx else "-", "交易元数据"),
+            ("发送方", tx.from_address if tx else "-", "交易元数据"),
+            ("接收方", tx.to_address if tx else "-", "交易元数据"),
+            ("原生币数量 wei", tx.value_wei if tx else "-", "交易元数据"),
+            ("执行状态", tx.status if tx else "-", "receipt"),
         ]
         claim_rows = [(claim.claim_id, claim.claim_type, claim.confidence, ", ".join(claim.support_evidence_ids) or "-") for claim in claim_graph.claims]
         return "\n\n".join(
             [
                 self._table(["字段", "值", "证据"], rows),
-                "### Claim 摘要",
-                self._table(["Claim", "Type", "Confidence", "Evidence"], claim_rows),
+                "### 结论摘要",
+                self._table(["结论", "类型", "置信度", "证据"], claim_rows),
             ]
         )
 
@@ -452,14 +452,14 @@ class ReportService:
         ]
         return "\n\n".join(
             [
-                self._table(["类别", "金额", "资产", "证据", "置信度"], rows) if rows else "当前没有 native value 或 token transfer evidence。",
+                self._table(["类别", "金额", "资产", "证据", "置信度"], rows) if rows else "当前没有原生币 value 或 token transfer 证据。",
                 "单笔 native value transfer 只证明交易内资金移动，不等同于攻击收益或协议损失。",
             ]
         )
 
     def _evidence_summary(self, evidence: list) -> str:
         rows = [(item.id, item.source_type, item.producer, item.claim_key, item.confidence) for item in evidence[:50]]
-        return self._table(["Evidence", "Source Type", "Producer", "Claim", "Confidence"], rows) if rows else "暂无 evidence。"
+        return self._table(["证据", "来源类型", "采集模块", "结论键", "置信度"], rows) if rows else "暂无证据。"
 
     def _transaction_attack_boundaries(self, claim_graph: ClaimGraph) -> str:
         boundary_claims = [claim for claim in claim_graph.claims if claim.claim_type == "boundary"]
@@ -493,16 +493,16 @@ class ReportService:
         return self._table(
             ["字段", "结论"],
             [
-                ("报告类型", "攻击 RCA"),
-                ("核心结论", root.text if root else (case.root_cause_one_liner or "未形成 high-confidence root cause")),
-                ("攻击类型", claim_graph.renderer_family),
+                ("报告类型", "攻击事件根因分析"),
+                ("核心结论", self._localized_text(root.text if root else (case.root_cause_one_liner or "尚未形成高置信度根因"))),
+                ("攻击类型", self._renderer_label(claim_graph.renderer_family)),
                 ("损失估计", impact),
                 ("关键交易", key_txs),
                 ("被攻击组件", self._component_hint(claim_graph)),
                 ("根因位置", invariant or "-"),
-                ("证据强度", case.confidence),
-                ("当前边界", "; ".join(claim_graph.global_boundaries) or "无关键阻断边界"),
-                ("建议动作", self._first_remediation(claim_graph) or "按根因 claim 补充修复和监控动作"),
+                ("证据强度", self._confidence_label(case.confidence)),
+                ("当前边界", "；".join(self._localized_text(boundary) for boundary in claim_graph.global_boundaries) or "无关键阻断边界"),
+                ("建议动作", self._first_remediation(claim_graph) or "按根因结论补充修复和监控动作"),
             ],
         )
 
@@ -511,13 +511,13 @@ class ReportService:
         for claim in claim_graph.claims:
             blocks.extend(
                 [
-                    f"### {claim.claim_id}: {claim.text}",
+                    f"### {claim.claim_id}：{self._localized_text(claim.text)}",
                     "",
-                    f"- 类型: `{claim.claim_type}`",
-                    f"- 置信度: `{claim.confidence}`",
+                    f"- 类型: `{self._claim_type_label(claim.claim_type)}`",
+                    f"- 置信度: `{self._confidence_label(claim.confidence)}`",
                     f"- 支持证据: {', '.join(claim.support_evidence_ids) or '-'}",
-                    f"- 反证检查: {claim.falsification or '-'}",
-                    f"- 推理链: {claim.reasoning or '-'}",
+                    f"- 反证检查: {self._localized_text(claim.falsification) or '-'}",
+                    f"- 推理链: {self._localized_text(claim.reasoning) or '-'}",
                     "",
                 ]
             )
@@ -525,23 +525,23 @@ class ReportService:
 
     def _scope_section(self, case, claim_graph: ClaimGraph, transactions: list) -> str:
         scope_claims = [claim for claim in claim_graph.claims if claim.section == "事件范围"]
-        rows = [(claim.claim_id, claim.text, claim.confidence, ", ".join(claim.support_evidence_ids) or "-") for claim in scope_claims]
-        tx_rows = [(tx.phase, self._format_dt(tx.block_timestamp), tx.tx_hash, tx.from_address or "-", tx.to_address or "-") for tx in transactions[:25]]
+        rows = [(claim.claim_id, self._localized_text(claim.text), self._confidence_label(claim.confidence), ", ".join(claim.support_evidence_ids) or "-") for claim in scope_claims]
+        tx_rows = [(self._phase_label(tx.phase), self._format_dt(tx.block_timestamp), tx.tx_hash, tx.from_address or "-", tx.to_address or "-") for tx in transactions[:25]]
         return "\n\n".join(
             [
-                self._table(["Claim", "范围结论", "置信度", "证据"], rows) if rows else f"Seed: `{case.seed_value}`",
+                self._table(["结论编号", "范围结论", "置信度", "证据"], rows) if rows else f"入口：`{case.seed_value}`",
                 "### 交易范围",
-                self._table(["阶段", "时间", "Tx", "From", "To"], tx_rows) if tx_rows else "当前没有交易范围。",
+                self._table(["阶段", "时间", "交易", "发起方", "目标"], tx_rows) if tx_rows else "当前没有交易范围。",
             ]
         )
 
     def _phase_timeline(self, timeline: list[dict]) -> str:
         rows = [
             (
-                item.get("phase") or "unknown",
+                self._phase_label(item.get("phase")),
                 self._format_dt(item.get("timestamp")) or item.get("block_number") or "-",
                 item.get("tx_hash") or "-",
-                item.get("method") or "transaction",
+                self._localized_text(item.get("method") or "交易执行"),
                 self._timeline_role(item),
                 str(item.get("evidence_count", 0)),
             )
@@ -558,7 +558,7 @@ class ReportService:
                 "### 6.1 被违反的安全不变量",
                 str(invariant),
                 "### 6.2 实际执行路径",
-                root.reasoning if root else "当前没有 root_cause claim；不能输出确定根因。",
+                self._localized_text(root.reasoning) if root else "当前没有根因结论；不能输出确定根因。",
                 "### 6.3 缺失校验",
                 self._missing_check(root),
                 "### 6.4 为什么现有控制没有阻止",
@@ -575,11 +575,11 @@ class ReportService:
     def _financial_impact_from_claims(self, claim_graph: ClaimGraph) -> str:
         rows = [
             (
-                item.category,
+                self._financial_category_label(item.category),
                 item.usd_value or item.amount_display or item.amount_raw or "-",
                 item.asset,
                 ", ".join(item.support_evidence_ids) or "-",
-                item.confidence,
+                self._confidence_label(item.confidence),
             )
             for item in claim_graph.financial_impact
         ]
@@ -587,42 +587,42 @@ class ReportService:
 
     def _remediation_from_claims(self, claim_graph: ClaimGraph) -> str:
         rows = [
-            (claim.claim_id, self._remediation_category(claim.text), claim.text, ", ".join(claim.support_evidence_ids) or "-", claim.confidence)
+            (claim.claim_id, self._remediation_category(claim.text), self._localized_text(claim.text), ", ".join(claim.support_evidence_ids) or "-", self._confidence_label(claim.confidence))
             for claim in claim_graph.claims
             if claim.claim_type == "remediation"
         ]
-        return self._table(["Claim", "分类", "建议", "对应证据", "置信度"], rows) if rows else "当前没有足够 root-cause evidence 生成具体修复建议。"
+        return self._table(["结论编号", "分类", "建议", "对应证据", "置信度"], rows) if rows else "当前没有足够根因证据生成具体修复建议。"
 
     def _reproduction_steps(self, claim_graph: ClaimGraph, transactions: list) -> str:
         first_tx = transactions[0].tx_hash if transactions else "-"
         evidence_ids = sorted({evidence_id for claim in claim_graph.claims for evidence_id in claim.support_evidence_ids})
         evidence_text = ", ".join(evidence_ids[:8]) or "-"
         rows = [
-            ("1", "验证核心交易 receipt", first_tx, evidence_text),
-            ("2", "验证关键 logs / events", "receipt_log evidence", evidence_text),
-            ("3", "验证 trace / call path", "TxAnalyzer / trace artifact", evidence_text),
-            ("4", "验证源码条件或缺失校验", "source_line / finding rationale", evidence_text),
-            ("5", "验证资金流 edge", "fund_flow_edges", evidence_text),
-            ("6", "验证损失估值来源", "financial impact evidence", evidence_text),
+            ("1", "验证核心交易收据", first_tx, evidence_text),
+            ("2", "验证关键日志与事件", "交易收据日志证据", evidence_text),
+            ("3", "验证调用跟踪与调用路径", "TxAnalyzer / 调用跟踪工件", evidence_text),
+            ("4", "验证源码条件或缺失校验", "源码行 / finding 理由", evidence_text),
+            ("5", "验证资金流边", "资金流边证据", evidence_text),
+            ("6", "验证损失估值来源", "财务影响证据", evidence_text),
         ]
-        return self._table(["步骤", "动作", "对象", "Artifact / Evidence"], rows)
+        return self._table(["步骤", "动作", "对象", "工件 / 证据"], rows)
 
     def _methodology_boundaries(self, case, jobs: list[JobRun], claim_graph: ClaimGraph) -> str:
-        boundary_rows = [(index + 1, boundary) for index, boundary in enumerate(claim_graph.global_boundaries)]
-        job_rows = [(job.job_name, job.status, job.error or "-", job.started_at or job.created_at) for job in jobs[-20:]]
+        boundary_rows = [(index + 1, self._localized_text(boundary)) for index, boundary in enumerate(claim_graph.global_boundaries)]
+        job_rows = [(self._producer_label(job.job_name), self._job_status_label(job.status), self._localized_text(job.error) or "-", job.started_at or job.created_at) for job in jobs[-20:]]
         chain_method = (
-            "Sui JSON-RPC 用于拉取 transaction block、events、objectChanges 和 balanceChanges；TxAnalyzer 是 EVM 工具，本案不适用，因此本案不走 TxAnalyzer。"
+            "Sui JSON-RPC 用于拉取交易块、事件、对象变化和余额变化；TxAnalyzer 是 EVM 工具，本案不适用，因此本案不走 TxAnalyzer。"
             if getattr(case.network, "network_type", "evm") == "sui"
-            else "EVM case 优先使用 RPC receipt/logs、trace/source artifact、fund-flow evidence 和 worker output。"
+            else "EVM case 优先使用 RPC 交易收据和日志、调用跟踪/源码工件、资金流证据和自动分析模块输出。"
         )
         return "\n\n".join(
             [
-                "报告只使用结构化 evidence、finding、diagram specs 和 worker 输出，不使用 LLM 创造事实。",
+                "报告只使用结构化证据、结论、图例规格和自动分析模块输出，不使用大模型创造事实。",
                 chain_method,
                 "### 质量边界",
-                self._table(["#", "Boundary"], boundary_rows) if boundary_rows else "暂无全局质量边界。",
-                "### Job Run 摘要",
-                self._table(["Job", "Status", "Error", "Started"], job_rows) if job_rows else "暂无 job run。",
+                self._table(["#", "边界"], boundary_rows) if boundary_rows else "暂无全局质量边界。",
+                "### 任务运行摘要",
+                self._table(["任务", "状态", "错误", "开始时间"], job_rows) if job_rows else "暂无任务运行记录。",
             ]
         )
 
@@ -631,16 +631,18 @@ class ReportService:
             return "未确认"
         grouped: dict[str, int] = {}
         for item in items:
-            grouped[item.category] = grouped.get(item.category, 0) + 1
-        return ", ".join(f"{key}: {count}" for key, count in grouped.items())
+            label = self._financial_category_label(item.category)
+            grouped[label] = grouped.get(label, 0) + 1
+        return "，".join(f"{key} {count} 项" for key, count in grouped.items())
 
     def _component_hint(self, claim_graph: ClaimGraph) -> str:
         root = next((claim for claim in claim_graph.claims if claim.claim_type == "root_cause"), None)
-        return str((root.metadata or {}).get("component") or claim_graph.renderer_family if root else claim_graph.renderer_family)
+        value = (root.metadata or {}).get("component") if root else None
+        return str(value or self._renderer_label(claim_graph.renderer_family))
 
     def _first_remediation(self, claim_graph: ClaimGraph) -> str | None:
         claim = next((item for item in claim_graph.claims if item.claim_type == "remediation"), None)
-        return claim.text if claim else None
+        return self._localized_text(claim.text) if claim else None
 
     def _timeline_role(self, item: dict[str, Any]) -> str:
         phase = str(item.get("phase") or "unknown")
@@ -659,46 +661,46 @@ class ReportService:
     def _alternative_hypothesis_table(self, claim_graph: ClaimGraph) -> str:
         rows = [
             (
-                item.name,
+                self._localized_text(item.name),
                 ", ".join(item.support_evidence_ids) or "-",
-                ", ".join(item.contradicting_evidence_ids) or item.rationale,
-                item.status,
+                ", ".join(item.contradicting_evidence_ids) or self._localized_text(item.rationale),
+                self._alternative_status_label(item.status),
             )
             for item in claim_graph.alternative_hypotheses
         ]
-        return self._table(["假设", "支持证据", "反证/缺失证据", "结论"], rows) if rows else "暂无 alternative hypotheses；quality gate 会记录 warning。"
+        return self._table(["假设", "支持证据", "反证/缺失证据", "结论"], rows) if rows else "暂无替代假设；质量门禁会记录提醒。"
 
     def _missing_check(self, root: ReportClaim | None) -> str:
         if root is None:
             return "待补充。"
-        return str((root.metadata or {}).get("missing_check") or root.reasoning or "缺失校验需由 source/trace evidence 进一步定位。")
+        return self._localized_text((root.metadata or {}).get("missing_check") or root.reasoning or "缺失校验需由源码或调用跟踪证据进一步定位。")
 
     def _controls_failed(self, root: ReportClaim | None) -> str:
         if root is None:
             return "待补充。"
-        return str((root.metadata or {}).get("controls_failed") or "现有控制未覆盖该 vulnerable path，或相关检查在此路径上没有执行。")
+        return self._localized_text((root.metadata or {}).get("controls_failed") or "现有控制未覆盖该脆弱路径，或相关检查在此路径上没有执行。")
 
     def _necessary_conditions(self, root: ReportClaim | None) -> str:
         if root is None:
             return "待补充。"
-        return str((root.metadata or {}).get("necessary_conditions") or "必要条件包括可达的交易路径、满足前置状态、以及缺失或失效的安全检查。")
+        return self._localized_text((root.metadata or {}).get("necessary_conditions") or "必要条件包括可达的交易路径、满足前置状态、以及缺失或失效的安全检查。")
 
     def _claim_boundary(self, root: ReportClaim | None, claim_graph: ClaimGraph) -> str:
         evidence = ", ".join(root.support_evidence_ids) if root else "-"
-        boundaries = "; ".join(claim_graph.global_boundaries) or "无额外全局边界。"
-        return f"Root claim evidence: {evidence}. Boundaries: {boundaries}"
+        boundaries = "；".join(self._localized_text(boundary) for boundary in claim_graph.global_boundaries) or "无额外全局边界。"
+        return f"根因结论证据：{evidence}。边界：{boundaries}"
 
     def _remediation_category(self, text: str) -> str:
         lower = text.lower()
         if "monitor" in lower or "监控" in text:
-            return "monitoring rule"
+            return "监控规则"
         if "test" in lower or "invariant" in lower or "不变量" in text:
-            return "invariant test"
+            return "不变量测试"
         if "patch" in lower or "enforce" in lower or "修复" in text:
-            return "code patch"
+            return "代码修复"
         if "disclosure" in lower or "governance" in lower:
-            return "governance / disclosure"
-        return "immediate containment"
+            return "治理与披露"
+        return "立即处置"
 
     def _is_address_scope_boundary(self, case, transactions: list, evidence: list) -> bool:
         if case.seed_type != "address":
@@ -823,7 +825,7 @@ class ReportService:
                     ],
                 ),
                 "### 2.3 已采集证据来源",
-                self._table(["Producer", "Source Type", "Claim", "Confidence"], evidence_rows) if evidence_rows else "暂无 evidence。",
+                self._table(["采集模块", "来源类型", "结论键", "置信度"], evidence_rows) if evidence_rows else "暂无证据。",
             ]
         )
 
@@ -833,10 +835,10 @@ class ReportService:
                 "当前没有链上交易时间线。",
                 "",
                 "```text",
-                f"Phase 0: 用户输入地址 -> {case.seed_value}",
-                "Phase 1: 网络能力检查 -> 已完成",
-                "Phase 2: 地址 txlist 扩展 -> 未完成，原因是 Explorer API key 缺失或不可用",
-                "Phase 3: 正式攻击 RCA -> 尚未开始；需要 seed transaction 或 txlist 结果",
+                f"阶段 0: 用户输入地址 -> {case.seed_value}",
+                "阶段 1: 网络能力检查 -> 已完成",
+                "阶段 2: 地址 txlist 扩展 -> 未完成，原因是 Explorer API key 缺失或不可用",
+                "阶段 3: 正式攻击 RCA -> 尚未开始；需要入口交易或 txlist 结果",
                 "```",
                 "",
                 "这不是攻击时间线，而是线索处理状态。报告不会把缺失交易的地址 case 展开成调用链。"
@@ -860,7 +862,7 @@ class ReportService:
                 "### 4.1 根因结论",
                 "当前没有根因结论。原因不是“根因未知但疑似某类漏洞”，而是交易范围尚未建立：没有 seed transaction、receipt logs、trace、source 或资金流 evidence。",
                 "### 4.2 当前 finding 的含义",
-                self._table(["Finding", "Type", "Severity", "Confidence", "Review", "Evidence"], finding_rows) if finding_rows else "暂无 finding。",
+                self._table(["发现项", "类型", "严重性", "置信度", "审核", "证据"], finding_rows) if finding_rows else "暂无发现项。",
                 "### 4.3 明确排除的写法",
                 "\n".join(
                     [
@@ -928,7 +930,7 @@ class ReportService:
                     ]
                 ),
                 "### 6.3 本案 worker 执行记录",
-                self._table(["Worker", "Status", "Started", "Error"], job_rows) if job_rows else "暂无 job run。",
+                self._table(["任务模块", "状态", "开始时间", "错误"], job_rows) if job_rows else "暂无任务运行记录。",
                 "### 6.4 数据可靠性",
                 "当前报告可靠地表达了“证据不足和 provider 边界”；它不可靠地表达攻击路径，因此本版不输出攻击路径结论。",
             ]
@@ -942,14 +944,14 @@ class ReportService:
                 "### A.1 交易列表",
                 "暂无交易。地址 seed 需要 Explorer txlist 或用户提供 seed transaction 后才能建立交易列表。",
                 "### A.2 Evidence 列表",
-                self._table(["ID", "Source", "Producer", "Claim", "Confidence", "Raw Path"], evidence_rows) if evidence_rows else "暂无 evidence。",
-                "### A.3 Worker 最新执行记录",
-                self._table(["Worker", "Status", "Started", "Error"], job_rows) if job_rows else "暂无 job run。",
+                self._table(["ID", "来源", "采集模块", "结论键", "置信度", "原始路径"], evidence_rows) if evidence_rows else "暂无证据。",
+                "### A.3 任务模块最新执行记录",
+                self._table(["任务模块", "状态", "开始时间", "错误"], job_rows) if job_rows else "暂无任务运行记录。",
                 "### A.4 复核结论",
                 self._table(
                     ["复核项", "结论", "证据 / 说明"],
                     [
-                        ("地址是否已记录", "是", "case seed"),
+                        ("地址是否已记录", "是", "case 入口"),
                         ("网络是否可连通", "见 environment_capability", "environment_check_worker"),
                         ("是否有攻击交易", "否", "没有 txlist / receipt / trace"),
                         ("是否能发布攻击 RCA", "否", "当前只能发布地址线索预分析"),
@@ -1099,16 +1101,16 @@ class ReportService:
             return self._scallop_entities(case, transactions, evidence, scallop)
         if self._is_transaction_observation_report(case, evidence, FindingService(self.db).list_for_case(case.id)):
             rows = [
-                ("目标链", f"{case.network.name} ({case.network.chain_id})", "交易所在网络", "network config"),
-                ("Seed", case.seed_value, case.seed_type, "case seed"),
+                ("目标链", f"{case.network.name} ({case.network.chain_id})", "交易所在网络", "网络配置"),
+                ("入口", case.seed_value, self._seed_type_label(case.seed_type), "案例入口"),
             ]
             for tx in transactions:
                 if tx.from_address:
-                    rows.append(("From", tx.from_address, "交易发送方", tx.tx_hash))
+                    rows.append(("发起方", tx.from_address, "交易发送方", tx.tx_hash))
                 if tx.to_address:
-                    rows.append(("To", tx.to_address, "交易接收方", tx.tx_hash))
+                    rows.append(("目标", tx.to_address, "交易接收方", tx.tx_hash))
             evidence_rows = [
-                (item.producer, item.source_type, item.claim_key, item.confidence)
+                (self._producer_label(item.producer), self._source_type_label(item.source_type), self._claim_key_label(item.claim_key), self._confidence_label(item.confidence))
                 for item in evidence[:8]
             ]
             return "\n\n".join(
@@ -1116,42 +1118,42 @@ class ReportService:
                     "### 2.1 交易参与方",
                     self._table(["标识", "地址 / 对象", "角色", "证据"], rows),
                     "### 2.2 已采集证据来源",
-                    self._table(["Producer", "Source Type", "Claim", "Confidence"], evidence_rows) if evidence_rows else "暂无 evidence。",
+                    self._table(["采集模块", "证据类型", "结论键", "置信度"], evidence_rows) if evidence_rows else "暂无证据。",
                 ]
             )
         receipt = self._receipt_facts(evidence)
         incident = self._incident_facts(evidence)
         rows = [
-            ("目标链", f"{case.network.name} ({case.network.chain_id})", "事件发生网络", "network config"),
-            ("Seed", case.seed_value, case.seed_type, "case seed"),
+            ("目标链", f"{case.network.name} ({case.network.chain_id})", "事件发生网络", "网络配置"),
+            ("入口", case.seed_value, self._seed_type_label(case.seed_type), "案例入口"),
         ]
         attacker_rows = []
         seen: set[str] = set()
         for tx in transactions:
-            for label, address in (("From", tx.from_address), ("To", tx.to_address)):
+            for label, address in (("发起方", tx.from_address), ("目标", tx.to_address)):
                 if not address or address in seen:
                     continue
                 seen.add(address)
-                role = f"{tx.phase} 阶段交易提交地址" if label == "From" else f"{tx.phase} 阶段交互合约"
+                role = f"{self._phase_label(tx.phase)}阶段交易提交地址" if label == "发起方" else f"{self._phase_label(tx.phase)}阶段交互合约"
                 rows.append((label, address, role, tx.tx_hash))
-                if label == "From" and not receipt:
-                    attacker_rows.append((address, role, tx.tx_hash, tx.phase_confidence))
+                if label == "发起方" and not receipt:
+                    attacker_rows.append((address, role, tx.tx_hash, self._confidence_label(tx.phase_confidence)))
         if receipt:
             rows.extend(
                 [
-                    ("LayerZero EndpointV2", receipt.get("layerzero_endpoint_v2"), "top-level interacted contract", receipt.get("tx_hash")),
-                    ("RSETH_OFTAdapter", receipt.get("rseth_oft_adapter"), "rsETH Ethereum-side bridge escrow / receiver", "receipt_log"),
-                    ("rsETH Token", receipt.get("rsETH_token"), "transferred asset contract", "Transfer log"),
+                    ("LayerZero EndpointV2", receipt.get("layerzero_endpoint_v2"), "顶层交互合约", receipt.get("tx_hash")),
+                    ("RSETH_OFTAdapter", receipt.get("rseth_oft_adapter"), "rsETH Ethereum 侧桥接托管适配器", "交易收据日志"),
+                    ("rsETH Token", receipt.get("rsETH_token"), "被转移资产合约", "Transfer 日志"),
                 ]
             )
-            attacker_rows.append((receipt.get("attacker_receiver"), "rsETH 接收地址 / attacker receiver", receipt.get("tx_hash"), "high"))
+            attacker_rows.append((receipt.get("attacker_receiver"), "rsETH 接收地址 / 攻击者接收地址", receipt.get("tx_hash"), "高"))
         if not transactions:
-            rows.append(("外部情报", case.seed_value, "待链上交易补齐", "external_alert"))
-            attacker_rows.append(("待确认", "需要 seed transaction hash", case.seed_value, "partial"))
+            rows.append(("外部情报", case.seed_value, "待链上交易补齐", "外部情报"))
+            attacker_rows.append(("待确认", "需要核心交易哈希", case.seed_value, "部分"))
         if incident.get("primary_source"):
-            rows.append(("事件报告", incident["primary_source"], "外部事件复核来源", "external_report"))
+            rows.append(("事件报告", incident["primary_source"], "外部事件复核来源", "外部报告"))
         evidence_rows = [
-            (item.producer, item.source_type, item.claim_key, item.confidence)
+            (self._producer_label(item.producer), self._source_type_label(item.source_type), self._claim_key_label(item.claim_key), self._confidence_label(item.confidence))
             for item in evidence[:8]
         ]
         return "\n\n".join(
@@ -1161,7 +1163,7 @@ class ReportService:
                 "### 2.2 攻击者 / 接收地址",
                 self._table(["地址", "角色", "证据", "置信度"], attacker_rows),
                 "### 2.3 已采集证据来源",
-                self._table(["Producer", "Source Type", "Claim", "Confidence"], evidence_rows) if evidence_rows else "暂无 evidence。",
+                self._table(["采集模块", "证据类型", "结论键", "置信度"], evidence_rows) if evidence_rows else "暂无证据。",
             ]
         )
 
@@ -1184,17 +1186,17 @@ class ReportService:
             tx = self._transaction_scope_facts(evidence)
             rows = [
                 (
-                    "Tx 1",
+                    "交易 1",
                     self._format_dt(tx.get("timestamp")),
                     tx.get("tx_hash", case.seed_value),
-                    "native transfer" if tx.get("value_wei") else "transaction execution",
-                    f"block={tx.get('block_number', '-')}; status={tx.get('status', '-')}",
+                    "原生币转账" if tx.get("value_wei") else "交易执行",
+                    f"区块={tx.get('block_number', '-')}; 状态={tx.get('status', '-')}",
                 )
             ]
             return "\n\n".join(
                 [
                     "本节展示交易执行时间线，不代表攻击阶段划分。",
-                    self._table(["Step", "时间", "Tx", "动作", "证据"], rows),
+                    self._table(["步骤", "时间", "交易", "动作", "证据"], rows),
                 ]
             )
         receipt = self._receipt_facts_from_case_evidence(case.id)
@@ -1204,15 +1206,15 @@ class ReportService:
             tx_hash = receipt.get("tx_hash") or case.seed_value
             amount = self._token_amount(receipt.get("amount_rseth"))
             rows = [
-                ("Phase 0", "攻击前", "Unichain→Ethereum rsETH route", f"路径采用 1-of-1 DVN；srcEid={receipt.get('src_eid', '-')}, nonce={receipt.get('nonce', '-')}", incident.get("primary_source", "external_report")),
-                ("Phase 1", self._attack_window(case, timeline), tx_hash, f"调用 LayerZero EndpointV2 / lzReceive；block={receipt.get('block_number', '-')}", "tx_metadata + receipt"),
-                ("Phase 2", self._attack_window(case, timeline), receipt.get("rseth_oft_adapter", "-"), f"OFTReceived：amount={amount} rsETH；receiver={receipt.get('attacker_receiver', '-')}", "receipt_log"),
-                ("Phase 3", self._attack_window(case, timeline), receipt.get("rsETH_token", "-"), f"Transfer：adapter -> attacker receiver，amount={amount} rsETH", "receipt_log"),
-                ("Phase 4", "事后", "Aave / lending markets", self._incident_impact_zh(incident) if incident else "待补充下游资金流 evidence", "external_report"),
+                ("阶段 0", "攻击前", "Unichain→Ethereum rsETH route", f"路径采用 1-of-1 DVN；srcEid={receipt.get('src_eid', '-')}, nonce={receipt.get('nonce', '-')}", incident.get("primary_source", "external_report")),
+                ("阶段 1", self._attack_window(case, timeline), tx_hash, f"调用 LayerZero EndpointV2 / lzReceive；block={receipt.get('block_number', '-')}", "交易元数据 + receipt"),
+                ("阶段 2", self._attack_window(case, timeline), receipt.get("rseth_oft_adapter", "-"), f"OFTReceived：amount={amount} rsETH；receiver={receipt.get('attacker_receiver', '-')}", "receipt_log"),
+                ("阶段 3", self._attack_window(case, timeline), receipt.get("rsETH_token", "-"), f"Transfer：adapter -> attacker receiver，amount={amount} rsETH", "receipt_log"),
+                ("阶段 4", "事后", "Aave / lending markets", self._incident_impact_zh(incident) if incident else "待补充下游资金流证据", "external_report"),
             ]
             return "\n\n".join(
                 [
-                    self._table(["Phase", "时间", "对象 / Tx", "动作", "证据"], rows),
+                    self._table(["阶段", "时间", "对象 / 交易", "动作", "证据"], rows),
                     "### 关键交易分析",
                     "\n".join(
                         [
@@ -1249,9 +1251,9 @@ class ReportService:
                     "当前没有链上交易时间线。",
                     "",
                     "```text",
-                    f"Phase 0: external alert seed -> {case.seed_value}",
-                    "Phase 1: 补齐 seed transaction hash 后运行 TxAnalyzer",
-                    "Phase 2: 从 trace/source/opcode 重建授权、铸造、借贷、兑换、跨链和补救阶段",
+                    f"阶段 0: 外部事件入口 -> {case.seed_value}",
+                    "阶段 1: 补齐入口交易 hash 后运行 TxAnalyzer",
+                    "阶段 2: 从 trace/source/opcode 重建授权、铸造、借贷、兑换、跨链和补救阶段",
                     "```",
                 ]
             )
@@ -1268,7 +1270,7 @@ class ReportService:
             )
         return "\n\n".join(
             [
-                self._table(["Phase", "时间", "Tx", "动作 / 方法", "Evidence"], rows),
+                self._table(["阶段", "时间", "交易", "动作 / 方法", "证据"], rows),
                 "### 关键交易分析",
                 "\n".join(
                     f"- `{item.get('tx_hash')}` `{item.get('phase')}` `{item.get('method') or 'unknown_method'}` block={item.get('block_number') or 'unknown'}"
@@ -1328,7 +1330,7 @@ class ReportService:
                 )
                 for finding in findings
             ]
-            finding_block = self._table(["Finding", "Type", "Severity", "Confidence", "Review", "Evidence"], rows) if rows else "暂无 reviewer 批准的高危 finding；本节基于 deterministic receipt evidence 和外部事件报告生成。"
+            finding_block = self._table(["发现项", "类型", "严重性", "置信度", "审核", "证据"], rows) if rows else "暂无 reviewer 批准的高危发现项；本节基于 deterministic receipt 证据和外部事件报告生成。"
             narrative = self._incident_mechanism_zh(incident) if incident else (
                 "Ethereum 侧 receipt 只能证明 packet delivery 后资产释放，尚未直接证明源链 burn / lock 是否存在。"
             )
@@ -1340,7 +1342,7 @@ class ReportService:
                     f"`RSETH_OFTAdapter` 将 `{amount}` rsETH 释放到攻击者接收地址。"
                     "这说明目标链合约按照已接受的跨链消息执行了释放流程；根因位置更接近跨链消息验证、DVN 信任假设和源/目标链状态一致性，而不是 rsETH token 的普通 transfer 逻辑。"
                 ),
-                "### 4.2 Finding 汇总",
+                "### 4.2 发现项汇总",
                 finding_block,
                 f"### 4.3 根因：{self._root_cause_label(case, evidence)}",
                 (
@@ -1417,7 +1419,7 @@ class ReportService:
             "### 4.1 合约代码没有问题",
             contract_position,
             "",
-            self._table(["Finding", "Type", "Severity", "Confidence", "Review", "Evidence"], rows),
+            self._table(["发现项", "类型", "严重性", "置信度", "审核", "证据"], rows),
             "### 4.2 根因：{}".format(self._root_cause_label(case, evidence)),
         ]
         for index, finding in enumerate(findings, start=1):
@@ -1530,14 +1532,14 @@ class ReportService:
                 "### 5.5 攻击成本",
                 "待确认。当前没有 gas、初始资金来源、DVN/message 生成成本和下游 swap 滑点 evidence；不写具体成本数字。",
                 "### 5.6 资金流证据",
-                self._table(["Evidence", "Producer", "Claim", "Confidence"], evidence_rows) if evidence_rows else "暂无资金流 worker 输出。",
+                self._table(["证据", "采集模块", "结论键", "置信度"], evidence_rows) if evidence_rows else "暂无资金流 worker 输出。",
             ]
             return "\n\n".join(lines)
 
         loss_evidence = [item for item in evidence if "loss" in item.claim_key.lower() or "fund" in item.claim_key.lower()]
         total_rows = [("总损失", "-", "-", f"${float(case.loss_usd):,.2f}")] if case.loss_usd is not None else [("待确认", "需要资金流 evidence", "需要价格源", "待链上复核")]
         evidence_table = self._table(
-            ["Evidence", "Producer", "Claim", "Confidence"],
+            ["证据", "采集模块", "结论键", "置信度"],
             [(item.id, item.producer, item.claim_key, item.confidence) for item in loss_evidence],
         ) if loss_evidence else "暂无资金流 worker 输出；需要交易 trace、token transfer logs、DEX swap 和 bridge deposit 参数。"
         lines = [
@@ -1686,44 +1688,44 @@ class ReportService:
         txanalyzer = self._txanalyzer_facts(evidence)
         jobs = self._latest_jobs(jobs)
         tx_rows = [
-            (tx.phase, tx.tx_hash, tx.block_number or "-", tx.method_name or tx.method_selector or "-", self._purrlend_artifact_status(tx.artifact_status))
+            (self._phase_label(tx.phase), tx.tx_hash, tx.block_number or "-", tx.method_name or tx.method_selector or "-", self._purrlend_artifact_status(tx.artifact_status))
             for tx in transactions
         ]
-        evidence_rows = [(item.id, item.source_type, item.producer, item.claim_key, item.confidence, item.raw_path or "-") for item in evidence]
-        job_rows = [(job.job_name, job.status, self._format_dt(job.started_at or job.created_at), job.error or "-") for job in jobs]
+        evidence_rows = [(item.id, self._source_type_label(item.source_type), self._producer_label(item.producer), self._claim_key_label(item.claim_key), self._confidence_label(item.confidence), item.raw_path or "-") for item in evidence]
+        job_rows = [(self._producer_label(job.job_name), self._job_status_label(job.status), self._format_dt(job.started_at or job.created_at), self._localized_text(job.error) or "-") for job in jobs]
         txanalyzer_rows = [
-            ("tx_hash", txanalyzer.get("tx_hash")),
-            ("has_trace", txanalyzer.get("has_trace")),
-            ("has_source", txanalyzer.get("has_source")),
-            ("has_opcode", txanalyzer.get("has_opcode")),
-            ("file_count", txanalyzer.get("file_count")),
+            ("交易哈希", txanalyzer.get("tx_hash")),
+            ("是否有调用跟踪", self._bool_label(txanalyzer.get("has_trace"))),
+            ("是否有源码", self._bool_label(txanalyzer.get("has_source"))),
+            ("是否有操作码", self._bool_label(txanalyzer.get("has_opcode"))),
+            ("导入文件数", txanalyzer.get("file_count")),
         ] if txanalyzer else []
         verification_rows = self._verification_rows(receipt, txanalyzer, jobs)
         receipt_rows = [
-            ("tx_hash", receipt.get("tx_hash")),
-            ("block_number", receipt.get("block_number")),
-            ("status", receipt.get("status")),
-            ("log_count", receipt.get("log_count")),
-            ("rsETH_token", receipt.get("rsETH_token")),
-            ("rseth_oft_adapter", receipt.get("rseth_oft_adapter")),
-            ("layerzero_endpoint_v2", receipt.get("layerzero_endpoint_v2")),
-            ("attacker_receiver", receipt.get("attacker_receiver")),
-            ("amount_rseth", receipt.get("amount_rseth")),
-            ("src_eid", receipt.get("src_eid")),
+            ("交易哈希", receipt.get("tx_hash")),
+            ("区块号", receipt.get("block_number")),
+            ("执行状态", receipt.get("status")),
+            ("日志数量", receipt.get("log_count")),
+            ("rsETH 代币合约", receipt.get("rsETH_token")),
+            ("rsETH OFT 适配器", receipt.get("rseth_oft_adapter")),
+            ("LayerZero EndpointV2", receipt.get("layerzero_endpoint_v2")),
+            ("攻击者接收地址", receipt.get("attacker_receiver")),
+            ("rsETH 数量", receipt.get("amount_rseth")),
+            ("源链 Endpoint ID", receipt.get("src_eid")),
             ("nonce", receipt.get("nonce")),
         ] if receipt else []
         return "\n\n".join(
             [
                 "### A.1 交易列表",
-                self._table(["Phase", "Tx", "Block", "Method", "Artifact"], tx_rows) if tx_rows else "暂无交易。对于 alert seed，需要先补齐 seed transaction hash。",
-                "### A.2 Evidence 列表",
-                self._table(["ID", "Source", "Producer", "Claim", "Confidence", "Raw Path"], evidence_rows) if evidence_rows else "暂无 evidence。",
-                "### A.3 Receipt 关键字段",
-                self._table(["字段", "值"], receipt_rows) if receipt_rows else "暂无 receipt 解码字段。",
-                "### A.4 TxAnalyzer Artifact Summary",
-                self._table(["字段", "值"], txanalyzer_rows) if txanalyzer_rows else "暂无 TxAnalyzer artifact summary。",
-                "### A.5 Worker 最新执行记录",
-                self._table(["Worker", "Status", "Started", "Error"], job_rows) if job_rows else "暂无 job run。",
+                self._table(["阶段", "交易", "区块", "方法", "工件"], tx_rows) if tx_rows else "暂无交易。对于外部情报入口，需要先补齐核心交易哈希。",
+                "### A.2 证据列表",
+                self._table(["ID", "来源类型", "采集模块", "结论键", "置信度", "原始路径"], evidence_rows) if evidence_rows else "暂无证据。",
+                "### A.3 交易收据关键字段",
+                self._table(["字段", "值"], receipt_rows) if receipt_rows else "暂无交易收据解码字段。",
+                "### A.4 TxAnalyzer 工件摘要",
+                self._table(["字段", "值"], txanalyzer_rows) if txanalyzer_rows else "暂无 TxAnalyzer 工件摘要。",
+                "### A.5 自动分析模块最新执行记录",
+                self._table(["模块", "状态", "开始时间", "错误"], job_rows) if job_rows else "暂无任务运行记录。",
                 "### A.6 复核结论",
                 self._table(["复核项", "结论", "证据 / 说明"], verification_rows),
             ]
@@ -1810,7 +1812,7 @@ class ReportService:
                 "### 2.2 攻击者与关键对象",
                 self._table(["地址 / 对象", "角色", "行为", "证据"], actor_rows),
                 "### 2.3 Workbench 交易范围",
-                self._table(["Phase", "Tx", "From", "To", "Method"], tx_rows) if tx_rows else "暂无交易。",
+                self._table(["阶段", "交易", "发送方", "接收方", "方法"], tx_rows) if tx_rows else "暂无交易。",
                 "### 2.4 公开来源",
                 self._table(["来源", "URL", "用途"], source_rows) if source_rows else "暂无外部来源。",
             ]
@@ -1821,14 +1823,14 @@ class ReportService:
         tx_hash = revert.get("seed_tx", case.seed_value)
         second_tx = revert.get("second_tx", "-")
         rows = [
-            ("Phase 0", "2026-01-29", "Aerodrome Lend support", "Revert 上线 Aerodrome Lend 相关集成，LP NFT 抵押与 gauge staking 管理路径形成新的组合边界。", "official post-mortem"),
-            ("Phase 1", flow.get("timestamp", self._attack_window(case, timeline)), tx_hash, "攻击者通过 flash liquidity / swap 路径准备 USDC 与 cbBTC，并 mint Aerodrome Slipstream LP NFT。", "receipt logs"),
-            ("Phase 2", flow.get("timestamp", self._attack_window(case, timeline)), "Revert Lend Vault", "LP NFT 被作为抵押存入 vault，随后借出约 49,000 USDC。", "receipt logs + BlockSec"),
-            ("Phase 3", flow.get("timestamp", self._attack_window(case, timeline)), "GaugeManager / Aerodrome Gauge", "同一抵押 LP NFT 进入 staking 管理路径。", "receipt logs + official post-mortem"),
-            ("Phase 4", flow.get("timestamp", self._attack_window(case, timeline)), "V3Utils / GaugeManager", "攻击者调用管理函数 unstake / modify / burn 抵押头寸，但执行前没有强制偿付或健康度检查。", "official post-mortem + BlockSec"),
-            ("Phase 5", flow.get("timestamp", self._attack_window(case, timeline)), "Attacker path", "flash liquidity 被归还，攻击者保留 seed tx 约 49,000 USDC 利润。", "receipt logs + BlockSec"),
-            ("Phase 6", "2026-01-30 03:29 UTC", second_tx, "第二笔攻击交易补走约 1,101.744193 USDC。", "official post-mortem"),
-            ("Phase 7", "事后", "Revert emergency response", "Revert 暂停 deposit / borrow，并修改 V3Utils 约束：仅允许 non-collateralized positions 走相关操作。", "official post-mortem"),
+            ("阶段 0", "2026-01-29", "Aerodrome Lend support", "Revert 上线 Aerodrome Lend 相关集成，LP NFT 抵押与 gauge staking 管理路径形成新的组合边界。", "official post-mortem"),
+            ("阶段 1", flow.get("timestamp", self._attack_window(case, timeline)), tx_hash, "攻击者通过 flash liquidity / swap 路径准备 USDC 与 cbBTC，并 mint Aerodrome Slipstream LP NFT。", "receipt logs"),
+            ("阶段 2", flow.get("timestamp", self._attack_window(case, timeline)), "Revert Lend Vault", "LP NFT 被作为抵押存入 vault，随后借出约 49,000 USDC。", "receipt logs + BlockSec"),
+            ("阶段 3", flow.get("timestamp", self._attack_window(case, timeline)), "GaugeManager / Aerodrome Gauge", "同一抵押 LP NFT 进入 staking 管理路径。", "receipt logs + official post-mortem"),
+            ("阶段 4", flow.get("timestamp", self._attack_window(case, timeline)), "V3Utils / GaugeManager", "攻击者调用管理函数 unstake / modify / burn 抵押头寸，但执行前没有强制偿付或健康度检查。", "official post-mortem + BlockSec"),
+            ("阶段 5", flow.get("timestamp", self._attack_window(case, timeline)), "Attacker path", "flash liquidity 被归还，攻击者保留入口交易约 49,000 USDC 利润。", "receipt logs + BlockSec"),
+            ("阶段 6", "2026-01-30 03:29 UTC", second_tx, "第二笔攻击交易补走约 1,101.744193 USDC。", "official post-mortem"),
+            ("阶段 7", "事后", "Revert emergency response", "Revert 暂停 deposit / borrow，并修改 V3Utils 约束：仅允许 non-collateralized positions 走相关操作。", "official post-mortem"),
         ]
         call_chain = "\n".join(
             [
@@ -1844,7 +1846,7 @@ class ReportService:
         )
         return "\n\n".join(
             [
-                self._table(["Phase", "时间", "对象 / Tx", "动作", "证据"], rows),
+                self._table(["阶段", "时间", "对象 / 交易", "动作", "证据"], rows),
                 "### 关键交易分析",
                 "\n".join(
                     [
@@ -1870,7 +1872,7 @@ class ReportService:
             )
             for finding in findings
         ]
-        finding_block = self._table(["Finding", "类型", "严重性", "置信度", "审核", "证据"], rows) if rows else "暂无 finding。"
+        finding_block = self._table(["发现项", "类型", "严重性", "置信度", "审核", "证据"], rows) if rows else "暂无发现项。"
         return "\n\n".join(
             [
                 "### 5.1 这不是普通转账、预言机或 token 漏洞",
@@ -1878,7 +1880,7 @@ class ReportService:
                     "从链上结果看，USDC 确实从 vault 相关路径流出，但这不是 USDC 合约的任意转账问题，也不是价格预言机把 LP NFT 估错这一类单点故障。"
                     "攻击能成立，是因为一张已经抵押并支撑债务的 LP NFT 又被另一个管理路径当成可自由 unstake / modify 的对象。"
                 ),
-                "### 5.2 Finding 汇总",
+                "### 5.2 发现项汇总",
                 finding_block,
                 "### 5.3 根因：借贷抵押状态没有贯穿到 gauge 管理路径",
                 (
@@ -2047,17 +2049,17 @@ class ReportService:
         return "\n\n".join(
             [
                 "### A.1 交易列表",
-                self._table(["Phase", "Tx", "Block", "From", "To", "Artifact"], tx_rows) if tx_rows else "暂无交易。",
+                self._table(["阶段", "交易", "区块", "发送方", "接收方", "产物"], tx_rows) if tx_rows else "暂无交易。",
                 "### A.2 Evidence 列表",
-                self._table(["ID", "Source", "Producer", "Claim", "Confidence", "Raw Path"], evidence_rows) if evidence_rows else "暂无 evidence。",
+                self._table(["ID", "来源", "采集模块", "结论键", "置信度", "原始路径"], evidence_rows) if evidence_rows else "暂无证据。",
                 "### A.3 Revert 事件字段",
                 self._table(["字段", "值"], [("incident_key", revert.get("incident_key", "-")), ("seed_tx", revert.get("seed_tx", "-")), ("second_tx", revert.get("second_tx", "-")), ("loss_summary", revert.get("loss_summary", "-")), ("nft_token_id", flow.get("nft_token_id", "-"))]),
                 "### A.4 外部来源",
                 self._table(["来源", "URL", "用途"], source_rows) if source_rows else "暂无外部来源。",
-                "### A.5 TxAnalyzer Artifact Summary",
+                "### A.5 TxAnalyzer 产物摘要",
                 self._table(["字段", "值"], txanalyzer_rows) if txanalyzer_rows else "暂无 TxAnalyzer artifact summary。",
-                "### A.6 Worker 最新执行记录",
-                self._table(["Worker", "Status", "Started", "Error"], job_rows) if job_rows else "暂无 job run。",
+                "### A.6 任务模块最新执行记录",
+                self._table(["任务模块", "状态", "开始时间", "错误"], job_rows) if job_rows else "暂无任务运行记录。",
                 "### A.7 复核结论",
                 self._table(["复核项", "结论", "证据 / 说明"], verification_rows),
             ]
@@ -2159,7 +2161,7 @@ class ReportService:
                 "### 2.2 公开来源",
                 self._table(["来源", "URL", "用途"], source_rows) if source_rows else "暂无外部来源。",
                 "### 2.3 已采集证据来源",
-                self._table(["Producer", "Source Type", "Claim", "Confidence"], evidence_rows) if evidence_rows else "暂无 evidence。",
+                self._table(["采集模块", "来源类型", "结论键", "置信度"], evidence_rows) if evidence_rows else "暂无证据。",
             ]
         )
 
@@ -2174,16 +2176,16 @@ class ReportService:
             if call.get("module") and call.get("function")
         )
         rows = [
-            ("Phase 0", "2023-11", "旧 V2/spool package 已部署", "Sui package 不可变；旧入口若未显式封禁，仍可能被调用", "external analysis"),
-            ("Phase 1", self._scallop_time(tx), digest, "攻击者提交 ProgrammableTransaction", "Sui tx metadata"),
-            ("Phase 2", self._scallop_time(tx), "new_spool_account + stake", "用新 spool account 建立奖励账户并短暂质押 sSUI/MarketCoin", "Sui tx input"),
-            ("Phase 3", self._scallop_time(tx), "update_points + redeem_rewards", f"reward event 显示赎回约 {flow.get('amount', '-')} SUI", "Sui event"),
-            ("Phase 4", self._scallop_time(tx), "TransferObjects", f"balanceChanges 显示攻击地址净增约 {flow.get('net_amount') or flow.get('amount', '-')} SUI", "Sui effects"),
-            ("Phase 5", "事后", "冻结与恢复", "Scallop 冻结受影响合约，公开表示核心合约/用户本金未受影响并承诺覆盖损失", "official notice via reports"),
+            ("阶段 0", "2023-11", "旧 V2/spool package 已部署", "Sui package 不可变；旧入口若未显式封禁，仍可能被调用", "external analysis"),
+            ("阶段 1", self._scallop_time(tx), digest, "攻击者提交 ProgrammableTransaction", "Sui 交易元数据"),
+            ("阶段 2", self._scallop_time(tx), "new_spool_account + stake", "用新 spool account 建立奖励账户并短暂质押 sSUI/MarketCoin", "Sui 交易输入"),
+            ("阶段 3", self._scallop_time(tx), "update_points + redeem_rewards", f"reward event 显示赎回约 {flow.get('amount', '-')} SUI", "Sui 事件"),
+            ("阶段 4", self._scallop_time(tx), "TransferObjects", f"balanceChanges 显示攻击地址净增约 {flow.get('net_amount') or flow.get('amount', '-')} SUI", "Sui effects"),
+            ("阶段 5", "事后", "冻结与恢复", "Scallop 冻结受影响合约，公开表示核心合约/用户本金未受影响并承诺覆盖损失", "公开公告 / 外部报告"),
         ]
         return "\n\n".join(
             [
-                self._table(["Phase", "时间", "对象 / Tx", "动作", "证据"], rows),
+                self._table(["阶段", "时间", "对象 / 交易", "动作", "证据"], rows),
                 "### 关键交易调用序列",
                 f"```text\n{call_sequence or '暂无 MoveCall 序列'}\n```",
                 "### 关键链上事实",
@@ -2209,7 +2211,7 @@ class ReportService:
             )
             for finding in findings
         ]
-        finding_block = self._table(["Finding", "Type", "Severity", "Confidence", "Review", "Evidence"], rows) if rows else "暂无 finding。"
+        finding_block = self._table(["发现项", "类型", "严重性", "置信度", "审核", "证据"], rows) if rows else "暂无发现项。"
         return "\n\n".join(
             [
                 "### 4.1 先把问题边界说清楚",
@@ -2217,7 +2219,7 @@ class ReportService:
                     "本案的直接目标是 rewards/spool 侧合约，不是 Scallop 的主借贷本金池。"
                     "这一区分很重要：用户存款没有因为主 market 逻辑被错误转走；损失来自奖励池中的 SUI 被异常领取。"
                 ),
-                "### 4.2 Finding 汇总",
+                "### 4.2 发现项汇总",
                 finding_block,
                 "### 4.3 根因：旧奖励合约的奖励基线失效",
                 (
@@ -2283,7 +2285,7 @@ class ReportService:
         env_rows = [
             ("Sui chain identifier", env.get("chain_identifier", "-"), "通过" if env.get("rpc_ok") else "未通过 / 未执行", env.get("rpc_source", "-")),
             ("Latest checkpoint", env.get("latest_checkpoint", "-"), "确认 Sui fullnode 可用", "sui_getLatestCheckpointSequenceNumber"),
-            ("Tx block", scallop.get("tx_digest") or (scallop.get("tx") or {}).get("digest") or "-", "已拉取", "sui_getTransactionBlock"),
+            ("交易区块", scallop.get("tx_digest") or (scallop.get("tx") or {}).get("digest") or "-", "已拉取", "sui_getTransactionBlock"),
             ("TxAnalyzer", "不适用", "TxAnalyzer 只覆盖 EVM 交易，本案改用 Sui native RPC artifact", "network_type=sui"),
         ]
         evidence_rows = [
@@ -2335,11 +2337,11 @@ class ReportService:
         return "\n\n".join(
             [
                 "### A.1 交易列表",
-                self._table(["Phase", "Tx", "Checkpoint", "Method", "Artifact"], tx_rows) if tx_rows else "暂无交易。",
+                self._table(["阶段", "交易", "检查点", "方法", "产物"], tx_rows) if tx_rows else "暂无交易。",
                 "### A.2 Evidence 列表",
-                self._table(["ID", "Source", "Producer", "Claim", "Confidence", "Raw Path"], evidence_rows) if evidence_rows else "暂无 evidence。",
-                "### A.3 Worker 最新执行记录",
-                self._table(["Worker", "Status", "Started", "Error"], job_rows) if job_rows else "暂无 job run。",
+                self._table(["ID", "来源", "采集模块", "结论键", "置信度", "原始路径"], evidence_rows) if evidence_rows else "暂无证据。",
+                "### A.3 任务模块最新执行记录",
+                self._table(["任务模块", "状态", "开始时间", "错误"], job_rows) if job_rows else "暂无任务运行记录。",
                 "### A.4 复核结论",
                 self._table(["复核项", "结论", "证据 / 说明"], verification_rows),
             ]
@@ -2541,9 +2543,9 @@ class ReportService:
         ]
         return "\n\n".join(
             [
-                "### Phase 1: 打开未支持铸造额度",
+                "### 阶段 1: 打开未支持铸造额度",
                 (
-                    f"Tx: `{cap_tx.get('tx_hash', '-')}` | Block `{cap_tx.get('block_number', '-')}`。"
+                    f"交易：`{cap_tx.get('tx_hash', '-')}` | 区块 `{cap_tx.get('block_number', '-')}`。"
                     f"攻击者先通过 `{cap_tx.get('to', '-')}` 调用 `Set Unbacked Mint Cap`。这一步本身不转出资产，"
                     "但它决定了后续 `mintUnbacked` 可以在多大额度内制造账面头寸。"
                 ),
@@ -2553,21 +2555,21 @@ class ReportService:
                 "  -> 为后续 4 次 mintUnbacked 打开额度空间\n"
                 "  -> 攻击从配置变化进入资产状态变化\n"
                 "```",
-                "### Phase 2: 连续 mintUnbacked",
+                "### 阶段 2: 连续 mintUnbacked",
                 (
                     "随后攻击者在不到 30 秒内连续提交 4 笔 `Mint Unbacked`。这一步是整条攻击最关键的资产状态变化："
                     "账面上出现了 2,000,000 xUSD aToken 规模的头寸，但这些头寸并不是攻击者先存入同等真实资产换来的。"
                 ),
-                self._table(["Tx", "Block", "金额", "状态"], mint_rows),
+                self._table(["交易", "区块", "金额", "状态"], mint_rows),
                 "```text\n"
                 "attacker -> Pool Proxy\n"
                 "  -> mintUnbacked(asset=xUSD, amount=500,000)\n"
                 "  -> aToken.mint(attacker, 500,000 xUSD)\n"
                 "  -> repeat x 4 = 2,000,000 xUSD aToken\n"
                 "```",
-                "### Phase 3: 授权借款路径",
+                "### 阶段 3: 授权借款路径",
                 (
-                    f"Tx: `{approve_tx.get('tx_hash', '-')}` | Block `{approve_tx.get('block_number', '-')}`。"
+                    f"交易：`{approve_tx.get('tx_hash', '-')}` | 区块 `{approve_tx.get('block_number', '-')}`。"
                     f"攻击者调用 `{approve_tx.get('to', '-')}` 上的 `Approve Delegation`，让后续 gateway / debt token 路径可以代为借款。"
                     "如果没有这一步，前面制造出来的账面头寸还不能顺畅进入实际 borrow 流程。"
                 ),
@@ -2575,12 +2577,12 @@ class ReportService:
                 "approveDelegation(delegatee = WrappedTokenGatewayV3, amount = max)\n"
                 "  -> gateway 可以替攻击者走 WETH 借款路径\n"
                 "```",
-                "### Phase 4: 借出真实资产",
+                "### 阶段 4: 借出真实资产",
                 (
                     "借款阶段把前面的账面头寸转化为真实资产。Explorer 对部分 borrow 交易显示 internal revert 标记，"
                     "但 receipt 和 internal transfer 仍确认 ETH 进入攻击者地址；因此这里按最终资产结果来理解，而不是只看 explorer 的提示文字。"
                 ),
-                self._table(["Tx", "Block", "方法", "Explorer 状态", "目标合约"], borrow_rows),
+                self._table(["交易", "区块", "方法", "Explorer 状态", "目标合约"], borrow_rows),
                 self._table(["资产", "金额", "路径", "证据"], borrow_asset_rows),
                 (
                     f"ETH 路径最清楚：`{internal.get('amount_eth', '-')}` ETH 从 `{internal.get('from', '-')}` "
@@ -2588,12 +2590,12 @@ class ReportService:
                     if internal
                     else "ETH 路径由 borrow 交易和 receipt/log 解释。"
                 ),
-                "### Phase 5: 兑换/桥接准备与最终外转",
+                "### 阶段 5: 兑换/桥接准备与最终外转",
                 (
                     "拿到真实资产以后，攻击者没有停留在 MegaETH。后续两笔 `0xd7a08473` 更像是兑换和桥接准备，"
                     "`0xa1f1ce43` 则完成 ETH 外转。decoded path 可以概括为：xUSD 先换成 USDT，USDT 和 ETH 再经跨链路由转往 Ethereum L1。"
                 ),
-                self._table(["Tx", "Block", "方法", "目标地址"], post_rows) if post_rows else "未识别到 post-exploit 调用。",
+                self._table(["交易", "区块", "方法", "目标地址"], post_rows) if post_rows else "未识别到事后转移调用。",
                 self._table(["路径", "金额", "目标链", "证据交易"], bridge_rows),
                 (
                     f"最终 ETH 外转交易 `{outflow.get('tx_hash', '-')}` 将 `{outflow.get('amount_eth', '-')}` ETH 转至 `{outflow.get('to', '-')}`。"
@@ -2601,7 +2603,7 @@ class ReportService:
                     else "最终外转由处置交易解释。"
                 ),
                 "### 全量交易索引",
-                self._table(["Phase", "时间(UTC)", "Tx", "动作 / 方法", "状态", "Evidence"], tx_rows),
+                self._table(["阶段", "时间(UTC)", "交易", "动作 / 方法", "状态", "证据"], tx_rows),
             ]
         )
 
@@ -2630,8 +2632,8 @@ class ReportService:
                     "本案的问题正是这些约束被连成了攻击路径。攻击者先调整 unbacked mint cap，再用 `mintUnbacked` 制造账面头寸，"
                     "然后把这些头寸带入标准 borrow。也就是说，最后的 ETH/USDT 外流只是结果，真正的根因在更早的权限和额度边界。"
                 ),
-                "### 4.2 Finding 汇总",
-                self._table(["结论", "类型", "严重性", "置信度", "审核状态", "证据摘要"], rows) if rows else "没有有效 finding。",
+                "### 4.2 发现项汇总",
+                self._table(["结论", "类型", "严重性", "置信度", "审核状态", "证据摘要"], rows) if rows else "没有有效发现项。",
                 "### 4.3 根因：unbacked mint 与 borrow 之间的隔离失效",
                 (
                     "根因可以压缩成一句话：攻击者制造出的 unbacked aToken 被借贷系统当作可继续参与 borrow 的有效头寸。"
@@ -2851,16 +2853,16 @@ class ReportService:
         return "\n\n".join(
             [
                 "### A.1 交易列表",
-                self._table(["阶段", "Tx", "Block", "动作", "Artifact"], tx_rows) if tx_rows else "没有交易。",
-                "### A.2 Evidence 摘要",
-                "完整 evidence 仍保存在数据库和 artifact 目录中；报告附录只放分组摘要，避免正文被证据 ID 淹没。",
-                self._table(["证据类型", "数量", "采集模块", "证明内容示例"], evidence_rows) if evidence_rows else "没有 evidence。",
+                self._table(["阶段", "交易", "区块", "动作", "产物"], tx_rows) if tx_rows else "没有交易。",
+                "### A.2 证据摘要",
+                "完整证据仍保存在数据库和 artifact 目录中；报告附录只放分组摘要，避免正文被证据 ID 淹没。",
+                self._table(["证据类型", "数量", "采集模块", "证明内容示例"], evidence_rows) if evidence_rows else "没有证据。",
                 "### A.3 Purrlend 事件字段",
                 self._table(["字段", "值"], [("attacker_address", purrlend.get("attacker_address")), ("explorer_url", purrlend.get("explorer_url")), ("primary_source", purrlend.get("primary_source")), ("megaeth_loss_summary", self._purrlend_loss_text(purrlend.get("megaeth_loss_summary"))), ("total_loss_summary", self._purrlend_loss_text(purrlend.get("total_loss_summary")))]),
-                "### A.4 TxAnalyzer Artifact Summary",
+                "### A.4 TxAnalyzer 产物摘要",
                 self._table(["字段", "值"], txanalyzer_rows) if txanalyzer_rows else "暂无 TxAnalyzer artifact summary。",
-                "### A.5 Worker 最新执行记录",
-                self._table(["模块", "状态", "开始时间", "错误"], job_rows) if job_rows else "暂无 job run。",
+                "### A.5 任务模块最新执行记录",
+                self._table(["模块", "状态", "开始时间", "错误"], job_rows) if job_rows else "暂无任务运行记录。",
                 "### A.6 复核结论",
                 self._table(["复核项", "结论", "证据 / 说明"], verification_rows),
             ]
@@ -2948,7 +2950,7 @@ class ReportService:
                 "### 2.2 攻击者与资金落点",
                 self._table(["地址", "角色", "行为", "证据"], attacker_rows),
                 "### 2.3 Workbench 交易范围",
-                self._table(["Phase", "Tx", "From", "To", "Method"], tx_rows) if tx_rows else "暂无交易。",
+                self._table(["阶段", "交易", "发送方", "接收方", "方法"], tx_rows) if tx_rows else "暂无交易。",
                 "### 2.4 已采集证据来源",
                 self._table(["证据层", "来源", "能证明什么", "可靠性"], evidence_groups),
             ]
@@ -2958,12 +2960,12 @@ class ReportService:
         addresses = bunni.get("addresses") or {}
         tx_hash = bunni.get("ethereum_attack_tx", case.seed_value)
         rows = [
-            ("Phase 0", "攻击准备", addresses.get("attacker_eoa", "-"), "攻击者 EOA 调用攻击合约，准备在一笔交易内完成借款、操纵、赎回、套利和还款。", "tx_metadata"),
-            ("Phase 1", self._attack_window(case, timeline), addresses.get("uniswap_v3_pool", "-"), "从 Uniswap V3 flashloan 借入 3,000,000 USDT。", "receipt logs + TxAnalyzer"),
-            ("Phase 2", self._attack_window(case, timeline), addresses.get("pool_manager", "-"), "连续 swap 把 USDC/USDT 价格推离正常区间，并把 USDC active balance 压到 28 wei。", "official post-mortem + trace"),
-            ("Phase 3", self._attack_window(case, timeline), addresses.get("bunni_hub", "-"), "执行 44 次小额 withdraw，利用 idleBalance 向下取整，把 active USDC 从 28 wei 进一步压到 4 wei。", "official post-mortem + trace"),
-            ("Phase 4", self._attack_window(case, timeline), addresses.get("pool_manager", "-"), "先用大额 USDT->USDC swap 把 tick 推到 839189，再反向 swap 捕获流动性估算回弹产生的价差。", "official post-mortem + receipt logs"),
-            ("Phase 5", self._attack_window(case, timeline), addresses.get("attack_contract", "-"), "归还 3,009,000 USDT flashloan，并把约 1.33M USDC 与 1.04M USDT 存入 Aave aToken。", "receipt logs"),
+            ("阶段 0", "攻击准备", addresses.get("attacker_eoa", "-"), "攻击者 EOA 调用攻击合约，准备在一笔交易内完成借款、操纵、赎回、套利和还款。", "交易元数据"),
+            ("阶段 1", self._attack_window(case, timeline), addresses.get("uniswap_v3_pool", "-"), "从 Uniswap V3 flashloan 借入 3,000,000 USDT。", "receipt logs + TxAnalyzer"),
+            ("阶段 2", self._attack_window(case, timeline), addresses.get("pool_manager", "-"), "连续 swap 把 USDC/USDT 价格推离正常区间，并把 USDC active balance 压到 28 wei。", "official post-mortem + trace"),
+            ("阶段 3", self._attack_window(case, timeline), addresses.get("bunni_hub", "-"), "执行 44 次小额 withdraw，利用 idleBalance 向下取整，把 active USDC 从 28 wei 进一步压到 4 wei。", "official post-mortem + trace"),
+            ("阶段 4", self._attack_window(case, timeline), addresses.get("pool_manager", "-"), "先用大额 USDT->USDC swap 把 tick 推到 839189，再反向 swap 捕获流动性估算回弹产生的价差。", "official post-mortem + receipt logs"),
+            ("阶段 5", self._attack_window(case, timeline), addresses.get("attack_contract", "-"), "归还 3,009,000 USDT flashloan，并把约 1.33M USDC 与 1.04M USDT 存入 Aave aToken。", "receipt logs"),
         ]
         trace_lines = [
             f"0. EOA {addresses.get('attacker_eoa', '-')} -> attack contract {addresses.get('attack_contract', '-')}",
@@ -2989,7 +2991,7 @@ class ReportService:
         )
         return "\n\n".join(
             [
-                self._table(["Phase", "时间", "对象 / Tx", "动作", "证据"], rows),
+                self._table(["阶段", "时间", "对象 / 交易", "动作", "证据"], rows),
                 "### 关键交易分析",
                 "\n".join(
                     [
@@ -3018,7 +3020,7 @@ class ReportService:
             )
             for finding in findings
         ]
-        finding_block = self._table(["Finding", "类型", "严重性", "置信度", "审核", "证据"], rows) if rows else "暂无 finding。"
+        finding_block = self._table(["发现项", "类型", "严重性", "置信度", "审核", "证据"], rows) if rows else "暂无发现项。"
         root_cause = bunni.get(
             "root_cause_summary",
             "BunniHubLogic.withdraw() 更新 idleBalance 时采用向下取整；当 active balance 已被压到极小值时，重复小额赎回会非线性放大误差。",
@@ -3029,7 +3031,7 @@ class ReportService:
                 "本案不应写成单纯的价格操纵，也不应写成 USDC、USDT 或 Uniswap V4 的通用漏洞。"
                 "价格操纵只是触发条件，真正可被提取价值的地方，是 Bunni 自定义流动性会计在极端 token balance 下失去了安全边界。"
             ),
-            "### 4.2 Finding 汇总",
+            "### 4.2 发现项汇总",
             finding_block,
             "### 4.3 根因：Bunni `withdraw()` 舍入方向在多次操作中不再安全",
             (
@@ -3219,15 +3221,15 @@ class ReportService:
         return "\n\n".join(
             [
                 "### A.1 交易列表",
-                self._table(["Phase", "Tx", "Block", "Method", "Artifact"], tx_rows) if tx_rows else "暂无交易。",
+                self._table(["阶段", "交易", "区块", "方法", "产物"], tx_rows) if tx_rows else "暂无交易。",
                 "### A.2 Evidence 列表",
-                self._table(["ID", "Source", "Producer", "Claim", "Confidence", "Raw Path"], evidence_rows) if evidence_rows else "暂无 evidence。",
+                self._table(["ID", "来源", "采集模块", "结论键", "置信度", "原始路径"], evidence_rows) if evidence_rows else "暂无证据。",
                 "### A.3 外部来源",
                 self._table(["来源", "URL", "用途"], source_rows),
-                "### A.4 TxAnalyzer Artifact Summary",
+                "### A.4 TxAnalyzer 产物摘要",
                 self._table(["字段", "值"], txanalyzer_rows) if txanalyzer_rows else "暂无 TxAnalyzer artifact summary。",
-                "### A.5 Worker 最新执行记录",
-                self._table(["Worker", "Status", "Started", "Error"], job_rows) if job_rows else "暂无 job run。",
+                "### A.5 任务模块最新执行记录",
+                self._table(["任务模块", "状态", "开始时间", "错误"], job_rows) if job_rows else "暂无任务运行记录。",
                 "### A.6 复核结论",
                 self._table(["复核项", "结论", "证据 / 说明"], verification_rows),
             ]
@@ -3919,17 +3921,17 @@ class ReportService:
             (
                 "目标链核心释放交易",
                 "已确认",
-                f"receipt status={receipt.get('status', '-')}; block={receipt.get('block_number', '-')}; adapter -> receiver 转出 {amount} rsETH。",
+                f"交易收据状态={receipt.get('status', '-')}；区块={receipt.get('block_number', '-')}；适配器向接收地址转出 {amount} rsETH。",
             ),
             (
-                "High/Critical finding 的 deterministic evidence",
+                "高危或严重结论的确定性证据",
                 "已确认",
-                "receipt_log 支撑 Transfer/OFTReceived/PacketDelivered；TxAnalyzer trace 支撑 EndpointV2 -> RSETH_OFTAdapter -> rsETH.transfer 调用链。",
+                "交易收据日志支撑 Transfer/OFTReceived/PacketDelivered；TxAnalyzer 调用跟踪支撑 EndpointV2 -> RSETH_OFTAdapter -> rsETH.transfer 调用链。",
             ),
             (
-                "TxAnalyzer artifact",
+                "TxAnalyzer 工件",
                 "trace 已确认",
-                f"txanalyzer_worker={tx_status}; files={txanalyzer.get('file_count', 0) if txanalyzer else 0}; source={txanalyzer.get('has_source', False) if txanalyzer else False}; opcode={txanalyzer.get('has_opcode', False) if txanalyzer else False}。",
+                f"TxAnalyzer 模块={self._job_status_label(tx_status)}；文件数={txanalyzer.get('file_count', 0) if txanalyzer else 0}；源码={self._bool_label(txanalyzer.get('has_source', False) if txanalyzer else False)}；操作码={self._bool_label(txanalyzer.get('has_opcode', False) if txanalyzer else False)}。",
             ),
             (
                 "授权 / 多签 / 补救交易",
@@ -3937,12 +3939,12 @@ class ReportService:
                 "本案是跨链消息验证失效，不是 ACL/Safe 权限授予型攻击；本报告不再把授权、多签或补救交易列为待补项。",
             ),
             (
-                "source-chain packet / DVN attestation",
+                "源链消息 / 验证网络证明",
                 "外部报告确认，本地 deterministic 范围外",
-                "本地 evidence 已确认 Ethereum 侧释放；source-chain burn/lock 缺失和 1-of-1 DVN 机制采用 Aave/Chainalysis 外部报告作为 corroborating evidence，不伪装成本地 deterministic evidence。",
+                "本地证据已确认 Ethereum 侧释放；源链销毁/锁定缺失和 1-of-1 验证网络机制采用外部报告作为佐证，不伪装成本地确定性证据。",
             ),
             (
-                "downstream fund-flow",
+                "下游资金流",
                 "未作为确定性结论",
                 "报告只确定 116,500 rsETH 释放；下游借贷市场影响保留为外部报告口径，不写成本地逐笔复现结论。",
             ),
@@ -3966,3 +3968,195 @@ class ReportService:
     def _cell(self, value: Any) -> str:
         text = str(value if value is not None else "-")
         return text.replace("\n", "<br>").replace("|", "\\|")
+
+    def _confidence_label(self, value: Any) -> str:
+        return {
+            "critical": "严重",
+            "high": "高",
+            "medium": "中",
+            "low": "低",
+            "partial": "部分",
+            "unknown": "未知",
+        }.get(str(value or "").lower(), str(value or "-"))
+
+    def _severity_label(self, value: Any) -> str:
+        return {
+            "critical": "严重",
+            "high": "高",
+            "medium": "中",
+            "low": "低",
+            "info": "信息",
+            "unknown": "未知",
+        }.get(str(value or "").lower(), str(value or "-"))
+
+    def _job_status_label(self, value: Any) -> str:
+        return {
+            "success": "成功",
+            "failed": "失败",
+            "partial": "部分完成",
+            "running": "运行中",
+            "pending": "等待中",
+            "cancelled": "已取消",
+            "completed": "已完成",
+        }.get(str(value or "").lower(), str(value or "-"))
+
+    def _claim_type_label(self, value: Any) -> str:
+        return {
+            "fact": "事实",
+            "inference": "推断",
+            "hypothesis": "假设",
+            "root_cause": "根因",
+            "loss": "损失",
+            "boundary": "边界",
+            "remediation": "修复建议",
+        }.get(str(value or ""), str(value or "-"))
+
+    def _alternative_status_label(self, value: Any) -> str:
+        return {
+            "accepted": "当前解释",
+            "rejected": "已排除",
+            "insufficient_evidence": "证据不足",
+            "secondary_factor": "次要因素",
+        }.get(str(value or ""), str(value or "-"))
+
+    def _financial_category_label(self, value: Any) -> str:
+        return {
+            "confirmed_loss": "已确认损失",
+            "probable_loss": "推定损失",
+            "unpriced_movement": "未估值资产流动",
+            "out_of_scope": "范围外",
+        }.get(str(value or ""), str(value or "-"))
+
+    def _renderer_label(self, value: Any) -> str:
+        return {
+            "amm_rounding_liquidity": "自动做市商舍入与流动性会计缺陷",
+            "collateral_solvency_bypass": "抵押物偿付能力检查绕过",
+            "cross_contract_reentrancy": "跨合约重入",
+            "oracle_price_manipulation": "预言机价格操纵",
+            "access_control_or_forwarder": "访问控制或可信转发器问题",
+            "reward_accounting": "奖励会计缺陷",
+            "bridge_message_verification": "跨链消息验证失效",
+            "generic_fallback": "通用证据约束分析",
+            "address_scope_boundary": "地址线索边界分析",
+        }.get(str(value or ""), str(value or "-"))
+
+    def _phase_label(self, value: Any) -> str:
+        return {
+            "preparation": "准备",
+            "trigger": "触发",
+            "exploit": "利用",
+            "extraction": "资产提取",
+            "laundering": "后续转移",
+            "post_exploit": "事后处置",
+            "remediation": "修复/补救",
+            "seed": "核心入口",
+            "unknown": "未知",
+            "tx": "交易",
+            "call": "调用",
+        }.get(str(value or "unknown"), str(value or "未知"))
+
+    def _producer_label(self, value: Any) -> str:
+        return {
+            "environment_check_worker": "环境检查模块",
+            "tx_discovery_worker": "交易发现模块",
+            "txanalyzer_worker": "TxAnalyzer 工件模块",
+            "decode_worker": "解码模块",
+            "acl_forensics_worker": "访问控制取证模块",
+            "safe_forensics_worker": "Safe 多签取证模块",
+            "fund_flow_worker": "资金流模块",
+            "loss_calculator_worker": "损失计算模块",
+            "rca_agent_worker": "根因分析模块",
+            "report_worker": "报告模块",
+            "report_export_worker": "报告导出模块",
+            "kelp_manual_import": "Kelp 人工证据导入",
+            "test": "测试模块",
+        }.get(str(value or ""), str(value or "-"))
+
+    def _seed_type_label(self, value: Any) -> str:
+        return {
+            "transaction": "交易哈希 / Digest",
+            "address": "地址",
+            "alert": "外部事件链接",
+            "contract": "合约",
+        }.get(str(value or ""), str(value or "-"))
+
+    def _source_type_label(self, value: Any) -> str:
+        return {
+            "tx_metadata": "交易元数据",
+            "receipt_log": "交易收据日志",
+            "balance_diff": "余额差异",
+            "artifact_summary": "工件摘要",
+            "trace_call": "调用跟踪",
+            "source_line": "源码行",
+            "signature": "签名证据",
+            "state_call": "状态读取",
+            "external_incident_report": "外部事件报告",
+            "external_alert": "外部情报",
+            "provider_degradation": "服务降级",
+            "agent_inference": "自动推断",
+        }.get(str(value or ""), str(value or "-"))
+
+    def _claim_key_label(self, value: Any) -> str:
+        return {
+            "transaction_in_case_scope": "交易属于本案范围",
+            "evm_receipt_events_normalized": "EVM 收据事件已标准化",
+            "fund_flow_edges": "资金流边",
+            "loss_calculation_status": "损失计算状态",
+            "kelpdao_rseth_release_receipt_summary": "KelpDAO rsETH 释放收据摘要",
+            "kelpdao_rseth_bridge_exploit_summary": "KelpDAO rsETH 跨链事件摘要",
+            "environment_capability": "环境能力",
+            "top_level_call_decoded": "顶层调用已解码",
+            "native_value_transfer": "原生资产转移",
+            "txanalyzer_artifacts_available": "TxAnalyzer 工件可用",
+            "address_discovery_explorer_missing": "地址发现缺少浏览器能力",
+            "defillama_hack_record": "DefiLlama 事件记录",
+            "external_incident_seed": "外部事件入口",
+        }.get(str(value or ""), str(value or "-"))
+
+    def _localized_text(self, value: Any) -> str:
+        text = str(value or "")
+        replacements = {
+            "Kelp DAO rsETH bridge accepted a LayerZero inbound packet for nonce 308 without an independently verified source-chain burn, allowing the Ethereum OFT adapter to release 116,500 rsETH from escrow.": "Kelp DAO rsETH 跨链桥在没有独立验证源链销毁的情况下，接受了 nonce 308 的 LayerZero 入站消息，导致 Ethereum 侧 OFT 适配器从托管资产中释放 116,500 rsETH。",
+            "Kelp DAO rsETH LayerZero bridge exploit": "Kelp DAO rsETH LayerZero 跨链桥攻击事件",
+            "Kelp DAO LayerZero OFT trusted-message path released unbacked rsETH": "Kelp DAO LayerZero OFT 可信消息路径释放了缺少源链支撑的 rsETH",
+            "The Ethereum RSETH_OFTAdapter released 116,500 rsETH after accepting a LayerZero inbound packet for nonce 308, while public reports and mainnet analysis indicate no matching Unichain burn/source transaction existed.": "Ethereum 侧 RSETH_OFTAdapter 在接受 nonce 308 的 LayerZero 入站消息后释放了 116,500 rsETH；公开报告和主网分析指出，Unichain 侧不存在匹配的销毁或源链交易。",
+            "Produce a valid Unichain source transaction and burn for nonce 308, or trace evidence showing the rsETH release was backed by a legitimate source-chain state transition.": "如果能提供 nonce 308 对应的有效 Unichain 源链交易和销毁记录，或提供调用跟踪证明该 rsETH 释放由合法源链状态转换支撑，则应推翻或下调该结论。",
+            "本报告范围包含 1 笔交易，核心 seed 为": "本报告范围包含 1 笔交易，核心入口为",
+            "Case transaction scope 和 tx_metadata evidence": "案例交易范围和交易元数据证据",
+            "The seed transaction and token transfer confirm the Ethereum release. External technical analyses identify the violated invariant as cross-chain burn/release consistency under a 1-of-1 DVN trust model.": "核心交易和代币转移确认了 Ethereum 侧资产释放。外部技术分析把被违反的不变量定位为 1-of-1 验证网络信任模型下的跨链销毁/释放一致性。",
+            "Violated invariant:": "被违反的不变量：",
+            "Vulnerable path / missing check:": "脆弱路径或缺失校验：",
+            "Target-chain asset release must correspond to a valid source-chain lock, burn, or message attestation.": "目标链资产释放必须对应有效的源链锁定、销毁或消息证明。",
+            "Root claim evidence:": "根因结论证据：",
+            "Boundaries:": "边界：",
+            "TxAnalyzer artifacts are unavailable in this environment.": "当前环境无法获得 TxAnalyzer 工件。",
+            "No transaction scope is available for this address seed.": "地址入口尚未形成交易范围。",
+            "External incident lead only; no local transaction scope is available yet.": "当前只有外部事件线索，本地尚未形成交易范围。",
+            "Transaction evidence does not establish an exploit root cause or protocol loss.": "当前交易证据不能证明漏洞根因或协议损失。",
+            "Raise message verification thresholds and require source-chain packet reconciliation.": "提高跨链消息验证阈值，并要求源链消息与目标链释放逐笔核对。",
+            "Monitor target-chain releases without matching source-chain events.": "监控没有匹配源链事件的目标链资产释放。",
+            "Asset movement evidence observed": "已观察到资产移动证据",
+            "Detected ": "检测到 ",
+            " native/token transfer evidence item(s).": " 条原生资产或代币转移证据。",
+            "Transfer logs and native value movement are deterministic fund-flow evidence, but they do not prove an exploit, root cause, or loss by themselves.": "Transfer 日志和原生资产移动属于确定性资金流证据，但单独不能证明存在攻击、漏洞根因或协议损失。",
+            "Correlate the transfer with exploit-specific receipt logs, permission changes, source code, trace, price impact, or external incident evidence before treating it as a security finding.": "在把资金移动作为安全结论前，需要把它与攻击特异性的 receipt 日志、权限变化、源码、调用跟踪、价格影响或外部事件证据关联起来。",
+            "Selected renderer family is consistent with current findings and evidence.": "当前分析类型与已有结论和证据一致。",
+            "Current structured evidence does not establish this as the primary explanation.": "当前结构化证据不足以把该假设确立为主要解释。",
+            "normal bridge withdrawal": "正常跨链提款",
+            "forged inbound packet": "伪造入站消息",
+            "DVN/signature failure": "验证网络或签名失效",
+            "downstream lending exploit": "下游借贷协议被攻击",
+            "attacker receiver": "攻击者接收地址",
+            "receiver": "接收方",
+            "sender": "发送方",
+            "report draft": "报告草稿",
+            "supports report": "支撑报告",
+            "partial": "部分",
+            "medium": "中",
+            "high": "高",
+            "low": "低",
+            "unknown": "未知",
+        }
+        for source, target in replacements.items():
+            text = text.replace(source, target)
+        return text

@@ -52,7 +52,7 @@ class DiagramService:
     def markdown_for_diagrams(self, diagrams: list[DiagramSpec]) -> str:
         by_type = {diagram.diagram_type: diagram for diagram in diagrams}
         blocks = [
-            "本节所有图例由 `diagram_specs` 生成，节点和边只来自已入库的交易、evidence、finding 和 worker 输出。证据不足时，图只保留已经确认的路径，不补画推测节点。",
+            "本节所有图例由图例规格生成，节点和边只来自已入库的交易、证据、结论和自动分析模块输出。证据不足时，图只保留已经确认的路径，不补画推测节点。",
         ]
         for diagram_type, heading in [
             ("attack_flow", "攻击流程图"),
@@ -66,8 +66,8 @@ class DiagramService:
             blocks.extend(
                 [
                     f"### {heading}",
-                    f"- 置信度：`{diagram.confidence}`",
-                    f"- Evidence：`{len(diagram.evidence_ids)}` 条",
+                    f"- 置信度：`{self._confidence_label(diagram.confidence)}`",
+                    f"- 证据：`{len(diagram.evidence_ids)}` 条",
                     "```mermaid",
                     diagram.mermaid_source,
                     "```",
@@ -111,13 +111,13 @@ class DiagramService:
         edges: list[dict[str, Any]] = []
         if not transactions and self._is_address_scope_boundary(evidence):
             boundary = self._address_boundary(evidence)
-            self._add_node(lines, nodes, "address", "Address seed")
-            self._add_node(lines, nodes, "capability", "RPC capability checked")
-            self._add_node(lines, nodes, "boundary", "No txlist / no receipt scope")
-            self._add_node(lines, nodes, "no_rca", "No attack RCA conclusion")
-            self._add_edge(lines, edges, "address", "capability", "case seed")
-            self._add_edge(lines, edges, "capability", "boundary", boundary.get("explorer_key_source", "missing explorer"))
-            self._add_edge(lines, edges, "boundary", "no_rca", "partial confidence")
+            self._add_node(lines, nodes, "address", "地址线索")
+            self._add_node(lines, nodes, "capability", "已检查网络能力")
+            self._add_node(lines, nodes, "boundary", "无交易列表或收据范围")
+            self._add_node(lines, nodes, "no_rca", "不输出攻击根因结论")
+            self._add_edge(lines, edges, "address", "capability", "case 入口")
+            self._add_edge(lines, edges, "capability", "boundary", self._localized_text(boundary.get("explorer_key_source", "缺少浏览器能力")))
+            self._add_edge(lines, edges, "boundary", "no_rca", "部分置信")
             return {
                 "diagram_type": "attack_flow",
                 "title": "地址线索处理图",
@@ -130,33 +130,33 @@ class DiagramService:
         attack_steps = self._extract_attack_steps(evidence)
         evidence_label = self._edge_label(evidence[:4])
         observation_only = bool(transactions) and not any(item.severity in {"medium", "high", "critical"} for item in findings)
-        self._add_node(lines, nodes, "seed", "Seed / 入口")
+        self._add_node(lines, nodes, "seed", "入口")
         if attack_steps:
             previous = "seed"
             for index, step in enumerate(attack_steps[:12], start=1):
                 node = f"step{index}"
-                self._add_node(lines, nodes, node, self._short(step.get("label") or step.get("id") or f"Step {index}", 48))
-                self._add_edge(lines, edges, previous, node, self._short(step.get("evidence") or step.get("tx_hash") or step.get("confidence") or "evidence", 52))
+                self._add_node(lines, nodes, node, self._short(self._localized_text(step.get("label") or step.get("id") or f"步骤 {index}"), 48))
+                self._add_edge(lines, edges, previous, node, self._short(self._localized_text(step.get("evidence") or step.get("tx_hash") or step.get("confidence") or "证据"), 52))
                 previous = node
             if findings and not observation_only:
-                self._add_node(lines, nodes, "root", self._short(findings[0].title, 40))
-                self._add_edge(lines, edges, previous, "root", findings[0].confidence)
+                self._add_node(lines, nodes, "root", self._short(self._localized_text(findings[0].title), 40))
+                self._add_edge(lines, edges, previous, "root", self._confidence_label(findings[0].confidence))
         elif not transactions:
-            self._add_node(lines, nodes, "evidence", "已确认 evidence")
-            self._add_edge(lines, edges, "seed", "evidence", evidence_label or "external_alert")
+            self._add_node(lines, nodes, "evidence", "已确认证据")
+            self._add_edge(lines, edges, "seed", "evidence", evidence_label or "外部情报")
         for index, tx in enumerate([] if attack_steps else transactions[:10], start=1):
             tx_node = f"tx{index}"
             from_node = f"from{index}"
             to_node = f"to{index}"
-            self._add_node(lines, nodes, from_node, self._short(tx.from_address or "unknown sender"))
+            self._add_node(lines, nodes, from_node, self._short(tx.from_address or "未知发送方"))
             self._add_node(lines, nodes, tx_node, f"{tx.phase or 'tx'}\\n{self._short(tx.tx_hash)}")
-            self._add_node(lines, nodes, to_node, self._short(tx.to_address or "unknown target"))
-            self._add_edge(lines, edges, "seed" if index == 1 else f"tx{index - 1}", from_node, "next")
-            self._add_edge(lines, edges, from_node, tx_node, tx.method_name or tx.method_selector or "call")
+            self._add_node(lines, nodes, to_node, self._short(tx.to_address or "未知目标"))
+            self._add_edge(lines, edges, "seed" if index == 1 else f"tx{index - 1}", from_node, "下一步")
+            self._add_edge(lines, edges, from_node, tx_node, tx.method_name or tx.method_selector or "调用")
             self._add_edge(lines, edges, tx_node, to_node, evidence_label or tx.artifact_status)
         if findings and not attack_steps and not observation_only:
-            self._add_node(lines, nodes, "root", self._short(findings[0].title, 40))
-            self._add_edge(lines, edges, f"tx{min(len(transactions), 10)}" if transactions else "evidence", "root", findings[0].confidence)
+            self._add_node(lines, nodes, "root", self._short(self._localized_text(findings[0].title), 40))
+            self._add_edge(lines, edges, f"tx{min(len(transactions), 10)}" if transactions else "evidence", "root", self._confidence_label(findings[0].confidence))
         confidence = self._diagram_confidence(evidence, transactions)
         return {
             "diagram_type": "attack_flow",
@@ -177,8 +177,8 @@ class DiagramService:
             address_nodes: dict[str, str] = {}
             grouped_edges: dict[tuple[str, str], list[dict[str, Any]]] = {}
             for flow in flows[:20]:
-                source_value = flow.get("from") or "source"
-                target_value = flow.get("to") or "destination"
+                source_value = flow.get("from") or "来源"
+                target_value = flow.get("to") or "目标"
                 source = self._flow_node_id(source_value, address_nodes)
                 target = self._flow_node_id(target_value, address_nodes)
                 self._add_node(lines, nodes, source, self._short(source_value))
@@ -190,21 +190,21 @@ class DiagramService:
             address_nodes: dict[str, str] = {}
             grouped_edges: dict[tuple[str, str], list[str]] = {}
             for tx in transactions[:12]:
-                source_value = tx.from_address or "sender"
-                target_value = tx.to_address or "target"
+                source_value = tx.from_address or "发送方"
+                target_value = tx.to_address or "目标"
                 source = self._flow_node_id(source_value, address_nodes)
                 target = self._flow_node_id(target_value, address_nodes)
                 self._add_node(lines, nodes, source, self._short(source_value))
                 self._add_node(lines, nodes, target, self._short(target_value))
-                grouped_edges.setdefault((source, target), []).append(f"{tx.phase or 'call'} / {tx.artifact_status}")
+                grouped_edges.setdefault((source, target), []).append(f"{self._localized_text(tx.phase or '调用')} / {self._localized_text(tx.artifact_status)}")
             for (source, target), labels in grouped_edges.items():
-                label = labels[0] if len(labels) == 1 else f"{len(labels)} tx / {labels[0]}"
+                label = labels[0] if len(labels) == 1 else f"{len(labels)} 笔交易 / {labels[0]}"
                 self._add_edge(lines, edges, source, target, self._short(label, 48))
         else:
-            self._add_node(lines, nodes, "missing", "暂无链上资金流 evidence")
+            self._add_node(lines, nodes, "missing", "暂无链上资金流证据")
             if self._is_address_scope_boundary(evidence):
-                self._add_node(lines, nodes, "address", "Address seed")
-                self._add_edge(lines, edges, "address", "missing", "no txlist")
+                self._add_node(lines, nodes, "address", "地址线索")
+                self._add_edge(lines, edges, "address", "missing", "无交易列表")
         confidence = "high" if flows else ("partial" if self._is_address_scope_boundary(evidence) else self._diagram_confidence(evidence, transactions))
         return {
             "diagram_type": "fund_flow",
@@ -236,17 +236,17 @@ class DiagramService:
         for source_type, rows in list(by_source.items())[:10]:
             source_node = self._evidence_node_id(source_type, source_nodes, "src")
             producers = sorted({item.producer for item in rows})
-            source_label = f"{source_type}\\n{len(rows)} evidence"
+            source_label = f"{self._source_type_label(source_type)}\\n{len(rows)} 条证据"
             if producers:
                 source_label = f"{source_label}\\n{self._short(', '.join(producers), 36)}"
             self._add_node(lines, nodes, source_node, source_label)
             for item in rows[:20]:
                 claim_node = self._evidence_node_id(item.claim_key, claim_nodes, "claim")
-                self._add_node(lines, nodes, claim_node, self._short(item.claim_key, 44))
+                self._add_node(lines, nodes, claim_node, self._short(self._claim_key_label(item.claim_key), 44))
                 source_claim_edges.setdefault((source_node, claim_node), []).append(item)
                 for finding in findings_by_evidence.get(item.id, []):
                     finding_node = self._evidence_node_id(finding.id, finding_nodes, "finding")
-                    self._add_node(lines, nodes, finding_node, self._short(finding.title, 44))
+                    self._add_node(lines, nodes, finding_node, self._short(self._localized_text(finding.title), 44))
                     claim_finding_edges.setdefault((claim_node, finding_node), []).append(finding)
 
         for (source_node, claim_node), rows in source_claim_edges.items():
@@ -255,11 +255,11 @@ class DiagramService:
             self._add_edge(lines, edges, claim_node, finding_node, self._finding_edge_label(rows))
         if evidence and not claim_finding_edges and findings:
             report_node = "report_draft"
-            self._add_node(lines, nodes, report_node, "report draft")
+            self._add_node(lines, nodes, report_node, "报告草稿")
             for claim_node in claim_nodes.values():
-                self._add_edge(lines, edges, claim_node, report_node, "supports report")
+                self._add_edge(lines, edges, claim_node, report_node, "支撑报告")
         if not evidence:
-            self._add_node(lines, nodes, "empty", "暂无 evidence")
+            self._add_node(lines, nodes, "empty", "暂无证据")
         confidence = "partial" if self._is_address_scope_boundary(evidence) else self._diagram_confidence(evidence, [])
         return {
             "diagram_type": "evidence_map",
@@ -357,7 +357,7 @@ class DiagramService:
             return ""
         confidence_order = {"high": 3, "medium": 2, "low": 1, "partial": 0}
         first = max(evidence, key=lambda item: confidence_order.get(str(item.confidence), -1))
-        return f"{first.source_type}:{first.confidence} ({len(evidence)} evidence)"
+        return f"{self._source_type_label(first.source_type)} / {self._confidence_label(first.confidence)}（{len(evidence)} 条证据）"
 
     def _finding_rank(self, finding) -> tuple[int, int, str]:
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4, "unknown": 5}
@@ -382,8 +382,8 @@ class DiagramService:
             if part not in {None, ""}
         )
         if len(flows) > 1:
-            label = f"{len(flows)} flows / {label or 'transfer'}"
-        return self._short(label or "transfer", 56)
+            label = f"{len(flows)} 条资金路径 / {label or '转移'}"
+        return self._short(self._localized_text(label or "转移"), 56)
 
     def _evidence_node_id(self, value: Any, node_map: dict[str, str], prefix: str) -> str:
         key = str(value or "-").lower()
@@ -394,12 +394,12 @@ class DiagramService:
     def _evidence_edge_label(self, rows: list) -> str:
         confidence_order = {"high": 3, "medium": 2, "low": 1, "partial": 0}
         confidence = max((str(item.confidence) for item in rows), key=lambda value: confidence_order.get(value, -1), default="partial")
-        return self._short(f"{len(rows)} evidence / {confidence}", 48)
+        return self._short(f"{len(rows)} 条证据 / {self._confidence_label(confidence)}", 48)
 
     def _finding_edge_label(self, findings: list) -> str:
         severity_order = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
         severity = max((str(item.severity) for item in findings), key=lambda value: severity_order.get(value, -1), default="info")
-        return self._short(f"{len(findings)} finding / {severity}", 48)
+        return self._short(f"{len(findings)} 条结论 / {self._severity_label(severity)}", 48)
 
     def _diagram_confidence(self, evidence: list, transactions: list) -> str:
         if any(item.confidence == "high" for item in evidence) and transactions:
@@ -418,3 +418,76 @@ class DiagramService:
 
     def _escape(self, value: str) -> str:
         return re.sub(r"\s+", " ", value).replace('"', "'")
+
+    def _confidence_label(self, value: Any) -> str:
+        return {
+            "high": "高",
+            "medium": "中",
+            "low": "低",
+            "partial": "部分",
+        }.get(str(value or "").lower(), str(value or "-"))
+
+    def _severity_label(self, value: Any) -> str:
+        return {
+            "critical": "严重",
+            "high": "高",
+            "medium": "中",
+            "low": "低",
+            "info": "信息",
+            "unknown": "未知",
+        }.get(str(value or "").lower(), str(value or "-"))
+
+    def _source_type_label(self, value: Any) -> str:
+        return {
+            "tx_metadata": "交易元数据",
+            "receipt_log": "交易收据日志",
+            "balance_diff": "余额差异",
+            "artifact_summary": "工件摘要",
+            "trace_call": "调用跟踪",
+            "external_incident_report": "外部事件报告",
+            "external_alert": "外部情报",
+            "provider_degradation": "服务降级",
+            "agent_inference": "自动推断",
+        }.get(str(value or ""), str(value or "-"))
+
+    def _claim_key_label(self, value: Any) -> str:
+        return {
+            "transaction_in_case_scope": "交易属于本案范围",
+            "evm_receipt_events_normalized": "EVM 收据事件已标准化",
+            "fund_flow_edges": "资金流边",
+            "loss_calculation_status": "损失计算状态",
+            "kelpdao_rseth_release_receipt_summary": "KelpDAO rsETH 释放收据摘要",
+            "kelpdao_rseth_bridge_exploit_summary": "KelpDAO rsETH 跨链事件摘要",
+            "environment_capability": "环境能力",
+            "top_level_call_decoded": "顶层调用已解码",
+            "native_value_transfer": "原生资产转移",
+            "address_discovery_explorer_missing": "地址发现缺少浏览器能力",
+        }.get(str(value or ""), str(value or "-"))
+
+    def _localized_text(self, value: Any) -> str:
+        text = str(value or "")
+        replacements = {
+            "Ethereum Endpoint accepted LayerZero packet": "Ethereum Endpoint 接受 LayerZero 消息",
+            "LayerZero Endpoint accepted packet": "LayerZero Endpoint 接受消息",
+            "Adapter released 116,500 rsETH to attacker receiver": "适配器向攻击者接收地址释放 116,500 rsETH",
+            "Kelp DAO LayerZero OFT trusted-message path released unbacked rsETH": "Kelp DAO LayerZero OFT 可信消息路径释放了缺少源链支撑的 rsETH",
+            "Etherscan token transfer + u0 trace": "Etherscan 代币转移 + u0 调用复核",
+            "attacker receiver": "攻击者接收地址",
+            "confidence": "置信度",
+            "evidence": "证据",
+            "external_alert": "外部情报",
+            "transfer": "转移",
+            "flows": "资金路径",
+            "source": "来源",
+            "destination": "目标",
+            "partial": "部分",
+            "medium": "中",
+            "high": "高",
+            "low": "低",
+            "cached": "已缓存",
+            "missing": "缺失",
+            "call": "调用",
+        }
+        for source, target in replacements.items():
+            text = text.replace(source, target)
+        return text
