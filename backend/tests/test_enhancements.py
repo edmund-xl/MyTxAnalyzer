@@ -189,6 +189,8 @@ def test_address_seed_report_is_boundary_not_attack_rca(client, db_session, monk
     assert "地址线索预分析报告" in content
     assert "不是完整攻击 RCA" in content
     assert "不能确认攻击路径、根因或损失" in content
+    assert "## 5. 数据流图与证据图" in content
+    assert "```mermaid" in content
     assert "铸造虚假抵押品" not in content
 
 
@@ -231,6 +233,8 @@ def test_alert_seed_report_is_external_event_preanalysis_not_attack_rca(client, 
     assert "外部事件预分析报告" in content
     assert "不是完整攻击 RCA" in content
     assert "Admin Key Compromised" in content
+    assert "## 5. 数据流图与证据图" in content
+    assert "```mermaid" in content
     assert "攻击事件 RCA 报告" not in content
     assert not any(issue["rule_id"] == "RQ-BLOCK-002" for issue in quality.json()["blocking_issues"])
     assert not any(issue["rule_id"] == "RQ-WARN-002" for issue in quality.json()["warnings"])
@@ -378,6 +382,7 @@ def test_simple_native_transfer_report_is_not_attack_template(client, db_session
     assert updated["attack_type"] is None
     assert "链上交易预分析报告" in content
     assert "不是攻击 RCA" in content
+    assert "## 5. 数据流图与证据图" in content
+    assert "```mermaid" in content
     assert "攻击者 / 接收地址" not in content
-    assert "攻击流程图" not in content
     assert "铸造虚假抵押品" not in content

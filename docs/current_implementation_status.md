@@ -66,9 +66,9 @@ RCA Workbench 与 MegaETH Pentest Workbench 已明确隔离：
 当前报告按 report type 生成不同结构：
 
 - 完整攻击 RCA：Executive Summary、结论与证据等级、事件范围、阶段时间线、实体角色、攻击路径与图、根因、财务影响、修复建议、复现验证、方法论边界、附录。
-- 地址线索预分析：只说明当前可确认范围、Provider/Explorer 能力边界、不能确认的内容、进入正式 RCA 的前置条件、Evidence/Job 附录。
-- 外部事件预分析：只说明 DefiLlama / 外部情报记录、外部口径与本地证据边界、当前不能确认的内容、进入正式 RCA 的前置条件。
-- 链上交易预分析：只说明交易基本信息、调用与资金移动、当前 evidence、不能确认的攻击结论、后续分析建议。
+- 地址线索预分析：说明当前可确认范围、Provider/Explorer 能力边界、不能确认的内容、进入正式 RCA 的前置条件，并固定包含数据流图/资金流图/证据图和 Evidence/Job 附录。
+- 外部事件预分析：说明 DefiLlama / 外部情报记录、外部口径与本地证据边界、当前不能确认的内容、进入正式 RCA 的前置条件，并固定包含数据流图/资金流图/证据图。
+- 链上交易预分析：说明交易基本信息、调用与资金移动、当前 evidence、不能确认的攻击结论，并固定包含数据流图/资金流图/证据图和后续分析建议。
 
 旧版通用章节仍作为历史报告兼容对象：
 
@@ -251,9 +251,9 @@ The RCA Workbench is separated from the MegaETH Pentest Workbench:
 Reports now use different structures by report type:
 
 - Full attack RCA: Executive Summary, conclusion/evidence level, incident scope, phase timeline, entity roles, attack path and diagrams, root cause, financial impact, remediation, reproduction/verification, methodology boundary, and appendix.
-- Address lead pre-analysis: confirmed scope, Provider/Explorer capability boundary, claims that cannot be confirmed yet, prerequisites for a full RCA, and Evidence/Job appendix.
-- External incident pre-analysis: DefiLlama / external intelligence record, external-vs-local evidence boundary, unconfirmed conclusions, and prerequisites for a full RCA.
-- On-chain transaction pre-analysis: transaction facts, call and value movement, current evidence, attack conclusions that cannot be confirmed, and next analysis steps.
+- Address lead pre-analysis: confirmed scope, Provider/Explorer capability boundary, claims that cannot be confirmed yet, prerequisites for a full RCA, fixed data/fund/evidence diagrams, and Evidence/Job appendix.
+- External incident pre-analysis: DefiLlama / external intelligence record, external-vs-local evidence boundary, unconfirmed conclusions, prerequisites for a full RCA, and fixed data/fund/evidence diagrams.
+- On-chain transaction pre-analysis: transaction facts, call and value movement, current evidence, attack conclusions that cannot be confirmed, fixed data/fund/evidence diagrams, and next analysis steps.
 
 The previous generic section set remains for historical report compatibility:
 

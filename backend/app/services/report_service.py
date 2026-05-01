@@ -172,7 +172,8 @@ class ReportService:
                 ("2. Provider / Explorer 能力边界", self._address_boundary_methodology(case, jobs, evidence)),
                 ("3. 当前不能确认的内容", self._address_boundary_root_cause(case, evidence, findings)),
                 ("4. 进入正式 RCA 的前置条件", self._address_boundary_next_steps(case)),
-                ("5. Evidence 与 Job Run 附录", self._address_boundary_appendix(evidence, jobs)),
+                ("5. 数据流图与证据图", self._diagrams(diagrams)),
+                ("6. Evidence 与 Job Run 附录", self._address_boundary_appendix(evidence, jobs)),
             ]
         elif report_type == "external_event_preanalysis":
             bodies = [
@@ -181,7 +182,8 @@ class ReportService:
                 ("2. 外部情报与本地证据边界", self._external_event_evidence_boundary(evidence)),
                 ("3. 当前不能确认的内容", self._external_event_unconfirmed()),
                 ("4. 进入正式 RCA 的前置条件", self._external_event_next_steps(case)),
-                ("5. Evidence 与 Job Run 附录", self._address_boundary_appendix(evidence, jobs)),
+                ("5. 数据流图与证据图", self._diagrams(diagrams)),
+                ("6. Evidence 与 Job Run 附录", self._address_boundary_appendix(evidence, jobs)),
             ]
         elif report_type == "transaction_preanalysis":
             bodies = [
@@ -190,7 +192,8 @@ class ReportService:
                 ("2. 调用与资金移动", self._transaction_call_and_flow(claim_graph)),
                 ("3. 当前 evidence", self._evidence_summary(evidence)),
                 ("4. 不能确认的攻击结论", self._transaction_attack_boundaries(claim_graph)),
-                ("5. 后续分析建议", self._transaction_next_steps(case)),
+                ("5. 数据流图与证据图", self._diagrams(diagrams)),
+                ("6. 后续分析建议", self._transaction_next_steps(case)),
             ]
         else:
             bodies = [
@@ -212,17 +215,18 @@ class ReportService:
         for title, body in bodies:
             section_claims = [claim for claim in claim_graph.claims if claim.section in title or title in claim.section]
             evidence_ids = sorted({evidence_id for claim in section_claims for evidence_id in claim.support_evidence_ids})
-            if not evidence_ids and title in {"5. 攻击路径与数据流图", "4. 数据流图"}:
+            is_diagram_section = "图" in title
+            if not evidence_ids and is_diagram_section:
                 evidence_ids = sorted({evidence_id for diagram in diagrams for evidence_id in (diagram.evidence_ids or [])})
             if not evidence_ids and title in {"0. Executive Summary", "TL;DR"}:
                 evidence_ids = sorted({evidence_id for claim in claim_graph.claims[:5] for evidence_id in claim.support_evidence_ids})
-            boundary = report_type in {"address_boundary", "transaction_preanalysis"} and not evidence_ids and title not in {"TL;DR", "5. Evidence 与 Job Run 附录"}
+            boundary = report_type in {"address_boundary", "external_event_preanalysis", "transaction_preanalysis"} and not evidence_ids and title not in {"TL;DR", "5. Evidence 与 Job Run 附录", "6. Evidence 与 Job Run 附录"}
             sections.append(
                 {
                     "title": title,
                     "body_markdown": body,
                     "evidence_ids": evidence_ids,
-                    "coverage": 1.0 if evidence_ids or title in {"5. 攻击路径与数据流图", "8. 总分析时长"} else (0.35 if boundary else 0.75),
+                    "coverage": 1.0 if evidence_ids or is_diagram_section or title == "8. 总分析时长" else (0.35 if boundary else 0.75),
                     "status": "supported" if evidence_ids else "boundary" if boundary else "partial",
                 }
             )
