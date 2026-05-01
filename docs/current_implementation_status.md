@@ -28,6 +28,12 @@ RCA Workbench 与 MegaETH Pentest Workbench 已明确隔离：
 - 交易 seed 发现支持 MegaETH 这类 provider fallback：如果 `eth_getTransactionByHash` 返回空但 receipt 存在，系统会从 receipt 的 block number 拉取 full block 并按 hash 找回交易字段。
 - 普通 native value transfer 不再被提升为 high-severity 攻击 finding；如果没有 calldata、事件日志、合约/trace 异常或外部事件证据，报告会生成“链上交易预分析报告”。
 - Address seed 如果没有 Explorer txlist / seed transaction，会生成 evidence boundary 和“地址线索预分析报告”，不再套用攻击事件报告模板。
+- 报告生成链路已加入 Claim Graph 和 Report QA Gate：报告先构建可追溯 claim/evidence graph，再生成 canonical Markdown/JSON，同时写入 `.claims.json` 和 `.quality.json` artifact。
+- `Report.metadata` 会记录 `claim_graph_path`、`quality_result_path`、`quality_score`、blocking/warning 数、renderer family、claim 数和 report type。
+- 新增报告质量 API：
+  - `GET /api/reports/{report_id}/claims`
+  - `GET /api/reports/{report_id}/quality`
+- `POST /api/reports/{report_id}/publish` 会执行 quality gate；存在 blocking issue 或旧报告缺少 quality artifact 时返回 `422`，要求重新生成或补证。
 - FundFlow worker 读取标准化 `fund_flow_edges`，资金流图按同源地址聚合并在边上标注 amount、asset、tx/evidence 和 confidence。
 - LossCalculator worker 已支持稳定币直接估值；缺少价格源时只写 evidence boundary，不伪造 USD 结论。
 - Case summary endpoint：
@@ -50,12 +56,18 @@ RCA Workbench 与 MegaETH Pentest Workbench 已明确隔离：
 - Refresh 只刷新当前 tab 需要的数据，以及 case metadata/summary。
 - Dashboard case list、Evidence、Findings、Reports、Jobs 和 Timeline 已分页加载，不再随历史数据线性扩大首屏 payload。
 - Jobs tab 同时展示 workflow run 和 worker job run，便于定位一次 run 的失败位置。
-- Reports tab 支持 Markdown preview、Mermaid 渲染、PDF export status 和 PDF download。
+- Reports tab 支持 Markdown preview、Mermaid 渲染、PDF export status 和 PDF download，并展示 quality score、blocking/warning issue、renderer family、claim count 和 Claims preview。
 - Findings review action 第一版只保留 approve/reject，并限制 reviewer/admin 角色使用。
 
 ### 报告与图例输出
 
-当前报告固定生成：
+当前报告按 report type 生成不同结构：
+
+- 完整攻击 RCA：Executive Summary、结论与证据等级、事件范围、阶段时间线、实体角色、攻击路径与图、根因、财务影响、修复建议、复现验证、方法论边界、附录。
+- 地址线索预分析：只说明当前可确认范围、Provider/Explorer 能力边界、不能确认的内容、进入正式 RCA 的前置条件、Evidence/Job 附录。
+- 链上交易预分析：只说明交易基本信息、调用与资金移动、当前 evidence、不能确认的攻击结论、后续分析建议。
+
+旧版通用章节仍作为历史报告兼容对象：
 
 - TL;DR
 - 概述
@@ -198,6 +210,12 @@ The RCA Workbench is separated from the MegaETH Pentest Workbench:
 - Transaction seed discovery supports provider fallback for networks such as MegaETH: when `eth_getTransactionByHash` is empty but a receipt exists, the system fetches the full block from the receipt block number and recovers transaction fields by hash.
 - Plain native value transfers are no longer promoted to high-severity attack findings. Without calldata, event logs, contract/trace anomalies, or external incident evidence, the report is generated as an “on-chain transaction pre-analysis report”.
 - Address seeds without Explorer txlist or a seed transaction now produce an evidence boundary and an “address lead pre-analysis report” instead of using the attack incident report template.
+- Report generation now includes a Claim Graph and Report QA Gate. The report first builds a traceable claim/evidence graph, then generates canonical Markdown/JSON plus `.claims.json` and `.quality.json` artifacts.
+- `Report.metadata` records `claim_graph_path`, `quality_result_path`, `quality_score`, blocking/warning counts, renderer family, claim count, and report type.
+- Report quality APIs:
+  - `GET /api/reports/{report_id}/claims`
+  - `GET /api/reports/{report_id}/quality`
+- `POST /api/reports/{report_id}/publish` runs the quality gate. Reports with blocking issues, or older reports without quality artifacts, return `422` and must be regenerated or backed by stronger evidence.
 - The FundFlow worker consumes standardized `fund_flow_edges`; fund-flow diagrams aggregate by common source address and label each edge with amount, asset, tx/evidence, and confidence.
 - The LossCalculator worker supports direct stablecoin valuation. When a price source is missing, it records an evidence boundary instead of fabricating USD loss.
 - Case summary endpoints:
@@ -220,12 +238,18 @@ The RCA Workbench is separated from the MegaETH Pentest Workbench:
 - Refresh reloads only the current tab plus case metadata/summary.
 - Dashboard case list, Evidence, Findings, Reports, Jobs, and Timeline are paginated so first-page payload does not grow linearly with history.
 - The Jobs tab shows both workflow runs and worker job runs to locate the failed step in a specific run.
-- Reports tab supports Markdown preview, Mermaid rendering, PDF export status, and PDF download.
+- Reports tab supports Markdown preview, Mermaid rendering, PDF export status, and PDF download, and now shows quality score, blocking/warning issues, renderer family, claim count, and a Claims preview.
 - Findings review actions are intentionally limited to approve/reject for reviewer/admin roles in the first version.
 
 ### Report And Diagram Output
 
-Reports currently generate:
+Reports now use different structures by report type:
+
+- Full attack RCA: Executive Summary, conclusion/evidence level, incident scope, phase timeline, entity roles, attack path and diagrams, root cause, financial impact, remediation, reproduction/verification, methodology boundary, and appendix.
+- Address lead pre-analysis: confirmed scope, Provider/Explorer capability boundary, claims that cannot be confirmed yet, prerequisites for a full RCA, and Evidence/Job appendix.
+- On-chain transaction pre-analysis: transaction facts, call and value movement, current evidence, attack conclusions that cannot be confirmed, and next analysis steps.
+
+The previous generic section set remains for historical report compatibility:
 
 - TL;DR
 - Overview

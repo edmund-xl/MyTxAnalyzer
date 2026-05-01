@@ -10,10 +10,13 @@ from sqlalchemy.orm import Session
 
 from app.core.object_store import ObjectStore
 from app.models.db import JobRun, Report, ReportSection
+from app.models.report_quality import ClaimGraph, FinancialImpactItem, ReportClaim
 from app.services.case_service import CaseService
+from app.services.claim_builder_service import ClaimBuilderService
 from app.services.diagram_service import DiagramService
 from app.services.evidence_service import EvidenceService
 from app.services.finding_service import FindingService
+from app.services.report_quality_service import ReportQualityService
 from app.services.report_renderer_registry import ReportRendererRegistry
 
 
@@ -54,11 +57,15 @@ class ReportService:
         case = CaseService(self.db).get_case(case_id)
         language = language or case.language
         version = int(self.db.scalar(select(func.coalesce(func.max(Report.version), 0)).where(Report.case_id == case_id, Report.format == report_format))) + 1
-        sections = self._build_sections(case_id)
         evidence = EvidenceService(self.db).list_for_case(case_id)
         findings = [finding for finding in FindingService(self.db).list_for_case(case_id) if finding.reviewer_status != "rejected"]
         renderer = ReportRendererRegistry()
         renderer_key = renderer.select(case, evidence, findings)
+        renderer_metadata = renderer.metadata(renderer_key)
+        renderer_family = renderer_metadata["renderer_family"]
+        diagrams = DiagramService(self.db, self.object_store).generate_for_case(case_id, created_by="report_worker")
+        claim_graph = ClaimBuilderService(self.db).build_for_report(case_id, version, renderer_family)
+        sections = self._build_quality_sections(case_id, claim_graph, diagrams)
         coverage = self._coverage(sections)
         if report_format == "json":
             content_obj: dict[str, Any] = {
@@ -67,16 +74,22 @@ class ReportService:
                 "language": language,
                 "renderer": renderer_key,
                 "sections": sections,
+                "claim_graph": claim_graph.model_dump(mode="json"),
             }
             content = json.dumps(content_obj, indent=2, ensure_ascii=False, default=str)
             object_key = f"cases/{case_id}/reports/report_v{version}.json"
             content_type = "application/json"
         else:
-            content = self._render_markdown(case_id, sections)
+            content = self._render_markdown(case_id, sections, claim_graph)
             object_key = f"cases/{case_id}/reports/report_v{version}.md"
             content_type = "text/markdown"
+        quality = ReportQualityService(self.db, self.object_store).evaluate(case_id, version, claim_graph, content if isinstance(content, str) else None)
         content_bytes = content.encode("utf-8")
         object_uri = self.object_store.put_bytes(content_bytes, object_key, content_type)
+        claims_bytes = claim_graph.model_dump_json(indent=2).encode("utf-8")
+        claims_uri = self.object_store.put_bytes(claims_bytes, f"cases/{case_id}/reports/report_v{version}.claims.json", "application/json")
+        quality_bytes = quality.model_dump_json(indent=2).encode("utf-8")
+        quality_uri = self.object_store.put_bytes(quality_bytes, f"cases/{case_id}/reports/report_v{version}.quality.json", "application/json")
         report = Report(
             case_id=case_id,
             version=version,
@@ -86,7 +99,18 @@ class ReportService:
             object_path=object_uri,
             content_hash=self.object_store.sha256_bytes(content_bytes),
             evidence_coverage=coverage,
-            metadata_json={"generator": "report_worker", "sections": len(sections)} | renderer.metadata(renderer_key),
+            metadata_json={
+                "generator": "report_worker",
+                "sections": len(sections),
+                "claim_graph_path": claims_uri,
+                "quality_result_path": quality_uri,
+                "quality_score": quality.score,
+                "blocking_issue_count": len(quality.blocking_issues),
+                "warning_count": len(quality.warnings),
+                "claim_count": len(claim_graph.claims),
+                "report_type": claim_graph.metadata.get("report_type"),
+            }
+            | renderer_metadata,
             created_by=created_by,
         )
         self.db.add(report)
@@ -119,6 +143,7 @@ class ReportService:
         report = self.get(report_id)
         if not report:
             raise HTTPException(status_code=404, detail="Report not found")
+        ReportQualityService(self.db, self.object_store).assert_publishable(report)
         findings = FindingService(self.db).list_for_case(report.case_id, limit=10000)
         blockers = [f for f in findings if f.severity in {"critical", "high"} and f.reviewer_status != "approved"]
         if blockers:
@@ -129,6 +154,70 @@ class ReportService:
         self.db.commit()
         self.db.refresh(report)
         return report
+
+    def _build_quality_sections(self, case_id: str, claim_graph: ClaimGraph, diagrams: list) -> list[dict[str, Any]]:
+        case_service = CaseService(self.db)
+        case = case_service.get_case(case_id)
+        transactions = case_service.list_transactions(case_id)
+        timeline = case_service.timeline(case_id)
+        evidence = EvidenceService(self.db).list_for_case(case_id)
+        findings = [finding for finding in FindingService(self.db).list_for_case(case_id) if finding.reviewer_status != "rejected"]
+        jobs = list(self.db.scalars(select(JobRun).where(JobRun.case_id == case_id).order_by(JobRun.created_at)).all())
+        report_type = str(claim_graph.metadata.get("report_type") or "attack_rca")
+
+        if report_type == "address_boundary":
+            bodies = [
+                ("TL;DR", self._address_boundary_tldr(case, evidence)),
+                ("1. 当前可确认范围", self._address_boundary_overview(case, evidence, findings)),
+                ("2. Provider / Explorer 能力边界", self._address_boundary_methodology(case, jobs, evidence)),
+                ("3. 当前不能确认的内容", self._address_boundary_root_cause(case, evidence, findings)),
+                ("4. 进入正式 RCA 的前置条件", self._address_boundary_next_steps(case)),
+                ("5. Evidence 与 Job Run 附录", self._address_boundary_appendix(evidence, jobs)),
+            ]
+        elif report_type == "transaction_preanalysis":
+            bodies = [
+                ("TL;DR", self._tldr(case, timeline, evidence)),
+                ("1. 交易基本信息", self._transaction_basic_info(claim_graph, transactions, evidence)),
+                ("2. 调用与资金移动", self._transaction_call_and_flow(claim_graph)),
+                ("3. 当前 evidence", self._evidence_summary(evidence)),
+                ("4. 不能确认的攻击结论", self._transaction_attack_boundaries(claim_graph)),
+                ("5. 后续分析建议", self._transaction_next_steps(case)),
+            ]
+        else:
+            bodies = [
+                ("0. Executive Summary", self._executive_summary(case, claim_graph, transactions)),
+                ("1. 结论与证据等级", self._claim_level_summary(claim_graph)),
+                ("2. 事件范围", self._scope_section(case, claim_graph, transactions)),
+                ("3. 攻击阶段时间线", self._phase_timeline(timeline)),
+                ("4. 涉事实体与角色", self._entities(case, transactions, evidence)),
+                ("5. 攻击路径与数据流图", self._diagrams(diagrams)),
+                ("6. 根因分析", self._root_cause_from_claims(case, claim_graph)),
+                ("7. 财务影响", self._financial_impact_from_claims(claim_graph)),
+                ("8. 修复建议", self._remediation_from_claims(claim_graph)),
+                ("9. 复现与验证步骤", self._reproduction_steps(claim_graph, transactions)),
+                ("10. 方法论与质量边界", self._methodology_boundaries(case, jobs, claim_graph)),
+                ("附录", self._appendix(transactions, evidence, jobs)),
+            ]
+
+        sections: list[dict[str, Any]] = []
+        for title, body in bodies:
+            section_claims = [claim for claim in claim_graph.claims if claim.section in title or title in claim.section]
+            evidence_ids = sorted({evidence_id for claim in section_claims for evidence_id in claim.support_evidence_ids})
+            if not evidence_ids and title in {"5. 攻击路径与数据流图", "4. 数据流图"}:
+                evidence_ids = sorted({evidence_id for diagram in diagrams for evidence_id in (diagram.evidence_ids or [])})
+            if not evidence_ids and title in {"0. Executive Summary", "TL;DR"}:
+                evidence_ids = sorted({evidence_id for claim in claim_graph.claims[:5] for evidence_id in claim.support_evidence_ids})
+            boundary = report_type in {"address_boundary", "transaction_preanalysis"} and not evidence_ids and title not in {"TL;DR", "5. Evidence 与 Job Run 附录"}
+            sections.append(
+                {
+                    "title": title,
+                    "body_markdown": body,
+                    "evidence_ids": evidence_ids,
+                    "coverage": 1.0 if evidence_ids or title in {"5. 攻击路径与数据流图", "8. 总分析时长"} else (0.35 if boundary else 0.75),
+                    "status": "supported" if evidence_ids else "boundary" if boundary else "partial",
+                }
+            )
+        return sections
 
     def _build_sections(self, case_id: str) -> list[dict[str, Any]]:
         case_service = CaseService(self.db)
@@ -203,18 +292,16 @@ class ReportService:
             for section in sections
         }
 
-    def _render_markdown(self, case_id: str, sections: list[dict[str, Any]]) -> str:
+    def _render_markdown(self, case_id: str, sections: list[dict[str, Any]], claim_graph: ClaimGraph | None = None) -> str:
         case = CaseService(self.db).get_case(case_id)
         title = case.title or "On-chain RCA"
-        transactions = CaseService(self.db).list_transactions(case_id, limit=1)
-        evidence = EvidenceService(self.db).list_for_case(case_id)
-        findings = FindingService(self.db).list_for_case(case_id)
-        if self._is_address_scope_boundary(case, transactions, evidence):
+        report_type = (claim_graph.metadata.get("report_type") if claim_graph else None) or "attack_rca"
+        if report_type == "address_boundary":
             suffix = "地址线索预分析报告"
-        elif self._is_transaction_observation_report(case, evidence, findings):
+        elif report_type == "transaction_preanalysis":
             suffix = "链上交易预分析报告"
         else:
-            suffix = "攻击事件分析报告"
+            suffix = "攻击事件 RCA 报告"
         lines = [f"# {title} {suffix}", ""]
         for section in sections:
             lines.extend([f"## {section['title']}", "", section["body_markdown"], ""])
@@ -222,6 +309,298 @@ class ReportService:
 
     def _diagrams(self, diagrams: list) -> str:
         return DiagramService(self.db, self.object_store).markdown_for_diagrams(diagrams)
+
+    def _address_boundary_next_steps(self, case) -> str:
+        return self._table(
+            ["前置条件", "为什么需要", "完成后动作"],
+            [
+                ("Seed transaction", "交易 hash 才能拉取 receipt、trace、fund-flow 和 TxAnalyzer artifact", "切换入口类型为交易哈希并重新运行"),
+                ("Explorer txlist API key", "地址 seed 需要 txlist 扩展交易范围", "配置对应网络 Explorer key 后重新运行 discovery"),
+                ("人工确认线索角色", "孤立地址不能直接定性为攻击者或受害合约", "在 Findings 中补充 reviewer 结论并绑定 evidence"),
+            ],
+        )
+
+    def _transaction_basic_info(self, claim_graph: ClaimGraph, transactions: list, evidence: list) -> str:
+        tx = transactions[0] if transactions else None
+        rows = [
+            ("Tx hash", tx.tx_hash if tx else "-", "transaction_in_case_scope"),
+            ("Block", tx.block_number if tx else "-", "tx metadata"),
+            ("Timestamp", self._format_dt(tx.block_timestamp) if tx else "-", "tx metadata"),
+            ("From", tx.from_address if tx else "-", "tx metadata"),
+            ("To", tx.to_address if tx else "-", "tx metadata"),
+            ("Value wei", tx.value_wei if tx else "-", "tx metadata"),
+            ("Status", tx.status if tx else "-", "receipt"),
+        ]
+        claim_rows = [(claim.claim_id, claim.claim_type, claim.confidence, ", ".join(claim.support_evidence_ids) or "-") for claim in claim_graph.claims]
+        return "\n\n".join(
+            [
+                self._table(["字段", "值", "证据"], rows),
+                "### Claim 摘要",
+                self._table(["Claim", "Type", "Confidence", "Evidence"], claim_rows),
+            ]
+        )
+
+    def _transaction_call_and_flow(self, claim_graph: ClaimGraph) -> str:
+        movement = [item for item in claim_graph.financial_impact if item.category == "unpriced_movement"]
+        rows = [
+            (
+                item.category,
+                item.amount_display or item.amount_raw or "-",
+                item.asset,
+                ", ".join(item.support_evidence_ids) or "-",
+                item.confidence,
+            )
+            for item in movement
+        ]
+        return "\n\n".join(
+            [
+                self._table(["类别", "金额", "资产", "证据", "置信度"], rows) if rows else "当前没有 native value 或 token transfer evidence。",
+                "单笔 native value transfer 只证明交易内资金移动，不等同于攻击收益或协议损失。",
+            ]
+        )
+
+    def _evidence_summary(self, evidence: list) -> str:
+        rows = [(item.id, item.source_type, item.producer, item.claim_key, item.confidence) for item in evidence[:50]]
+        return self._table(["Evidence", "Source Type", "Producer", "Claim", "Confidence"], rows) if rows else "暂无 evidence。"
+
+    def _transaction_attack_boundaries(self, claim_graph: ClaimGraph) -> str:
+        boundary_claims = [claim for claim in claim_graph.claims if claim.claim_type == "boundary"]
+        lines = [
+            "当前报告明确不确认以下内容：",
+            "",
+            "- 不确认该交易属于攻击交易。",
+            "- 不确认存在漏洞根因。",
+            "- 不确认存在协议损失。",
+            "- 不确认 from/to 任一地址的攻击者、受害者或协议身份。",
+        ]
+        for claim in boundary_claims:
+            lines.extend(["", f"### {claim.claim_id}", claim.text, f"- 证据: {', '.join(claim.support_evidence_ids) or '-'}", f"- 反证路径: {claim.falsification or '-'}"])
+        return "\n".join(lines)
+
+    def _transaction_next_steps(self, case) -> str:
+        return self._table(
+            ["建议动作", "目的", "完成标准"],
+            [
+                ("补充 trace/source artifact", "确认是否存在合约路径或缺失校验", "TxAnalyzer 或 provider trace/source evidence 入库"),
+                ("补充协议事件上下文", "判断是否与真实安全事件相关", "receipt logs / postmortem / finding 绑定 evidence"),
+                ("从 from/to 地址扩展 txlist", "确认前后资金路径", "fund_flow_edges 覆盖交易前后窗口"),
+            ],
+        )
+
+    def _executive_summary(self, case, claim_graph: ClaimGraph, transactions: list) -> str:
+        root = next((claim for claim in claim_graph.claims if claim.claim_type == "root_cause"), None)
+        impact = self._impact_summary(claim_graph.financial_impact)
+        key_txs = ", ".join(tx.tx_hash for tx in transactions[:5]) or "-"
+        invariant = (root.metadata or {}).get("violated_invariant") if root else "-"
+        return self._table(
+            ["字段", "结论"],
+            [
+                ("报告类型", "攻击 RCA"),
+                ("核心结论", root.text if root else (case.root_cause_one_liner or "未形成 high-confidence root cause")),
+                ("攻击类型", claim_graph.renderer_family),
+                ("损失估计", impact),
+                ("关键交易", key_txs),
+                ("被攻击组件", self._component_hint(claim_graph)),
+                ("根因位置", invariant or "-"),
+                ("证据强度", case.confidence),
+                ("当前边界", "; ".join(claim_graph.global_boundaries) or "无关键阻断边界"),
+                ("建议动作", self._first_remediation(claim_graph) or "按根因 claim 补充修复和监控动作"),
+            ],
+        )
+
+    def _claim_level_summary(self, claim_graph: ClaimGraph) -> str:
+        blocks: list[str] = []
+        for claim in claim_graph.claims:
+            blocks.extend(
+                [
+                    f"### {claim.claim_id}: {claim.text}",
+                    "",
+                    f"- 类型: `{claim.claim_type}`",
+                    f"- 置信度: `{claim.confidence}`",
+                    f"- 支持证据: {', '.join(claim.support_evidence_ids) or '-'}",
+                    f"- 反证检查: {claim.falsification or '-'}",
+                    f"- 推理链: {claim.reasoning or '-'}",
+                    "",
+                ]
+            )
+        return "\n".join(blocks).strip() or "暂无 claim。"
+
+    def _scope_section(self, case, claim_graph: ClaimGraph, transactions: list) -> str:
+        scope_claims = [claim for claim in claim_graph.claims if claim.section == "事件范围"]
+        rows = [(claim.claim_id, claim.text, claim.confidence, ", ".join(claim.support_evidence_ids) or "-") for claim in scope_claims]
+        tx_rows = [(tx.phase, self._format_dt(tx.block_timestamp), tx.tx_hash, tx.from_address or "-", tx.to_address or "-") for tx in transactions[:25]]
+        return "\n\n".join(
+            [
+                self._table(["Claim", "范围结论", "置信度", "证据"], rows) if rows else f"Seed: `{case.seed_value}`",
+                "### 交易范围",
+                self._table(["阶段", "时间", "Tx", "From", "To"], tx_rows) if tx_rows else "当前没有交易范围。",
+            ]
+        )
+
+    def _phase_timeline(self, timeline: list[dict]) -> str:
+        rows = [
+            (
+                item.get("phase") or "unknown",
+                self._format_dt(item.get("timestamp")) or item.get("block_number") or "-",
+                item.get("tx_hash") or "-",
+                item.get("method") or "transaction",
+                self._timeline_role(item),
+                str(item.get("evidence_count", 0)),
+            )
+            for item in timeline
+        ]
+        return self._table(["阶段", "时间/区块", "交易", "行为", "对攻击的作用", "证据"], rows) if rows else "当前没有交易时间线。"
+
+    def _root_cause_from_claims(self, case, claim_graph: ClaimGraph) -> str:
+        root = next((claim for claim in claim_graph.claims if claim.claim_type == "root_cause"), None)
+        invariant = (root.metadata or {}).get("violated_invariant") if root else "待补充"
+        alternatives = self._alternative_hypothesis_table(claim_graph)
+        return "\n\n".join(
+            [
+                "### 6.1 被违反的安全不变量",
+                str(invariant),
+                "### 6.2 实际执行路径",
+                root.reasoning if root else "当前没有 root_cause claim；不能输出确定根因。",
+                "### 6.3 缺失校验",
+                self._missing_check(root),
+                "### 6.4 为什么现有控制没有阻止",
+                self._controls_failed(root),
+                "### 6.5 攻击成立的必要条件",
+                self._necessary_conditions(root),
+                "### 6.6 替代假设排除",
+                alternatives,
+                "### 6.7 证据强度与边界",
+                self._claim_boundary(root, claim_graph),
+            ]
+        )
+
+    def _financial_impact_from_claims(self, claim_graph: ClaimGraph) -> str:
+        rows = [
+            (
+                item.category,
+                item.usd_value or item.amount_display or item.amount_raw or "-",
+                item.asset,
+                ", ".join(item.support_evidence_ids) or "-",
+                item.confidence,
+            )
+            for item in claim_graph.financial_impact
+        ]
+        return self._table(["类别", "金额", "资产", "证据", "置信度"], rows) if rows else "当前没有财务影响 evidence。"
+
+    def _remediation_from_claims(self, claim_graph: ClaimGraph) -> str:
+        rows = [
+            (claim.claim_id, self._remediation_category(claim.text), claim.text, ", ".join(claim.support_evidence_ids) or "-", claim.confidence)
+            for claim in claim_graph.claims
+            if claim.claim_type == "remediation"
+        ]
+        return self._table(["Claim", "分类", "建议", "对应证据", "置信度"], rows) if rows else "当前没有足够 root-cause evidence 生成具体修复建议。"
+
+    def _reproduction_steps(self, claim_graph: ClaimGraph, transactions: list) -> str:
+        first_tx = transactions[0].tx_hash if transactions else "-"
+        evidence_ids = sorted({evidence_id for claim in claim_graph.claims for evidence_id in claim.support_evidence_ids})
+        evidence_text = ", ".join(evidence_ids[:8]) or "-"
+        rows = [
+            ("1", "验证核心交易 receipt", first_tx, evidence_text),
+            ("2", "验证关键 logs / events", "receipt_log evidence", evidence_text),
+            ("3", "验证 trace / call path", "TxAnalyzer / trace artifact", evidence_text),
+            ("4", "验证源码条件或缺失校验", "source_line / finding rationale", evidence_text),
+            ("5", "验证资金流 edge", "fund_flow_edges", evidence_text),
+            ("6", "验证损失估值来源", "financial impact evidence", evidence_text),
+        ]
+        return self._table(["步骤", "动作", "对象", "Artifact / Evidence"], rows)
+
+    def _methodology_boundaries(self, case, jobs: list[JobRun], claim_graph: ClaimGraph) -> str:
+        boundary_rows = [(index + 1, boundary) for index, boundary in enumerate(claim_graph.global_boundaries)]
+        job_rows = [(job.job_name, job.status, job.error or "-", job.started_at or job.created_at) for job in jobs[-20:]]
+        chain_method = (
+            "Sui JSON-RPC 用于拉取 transaction block、events、objectChanges 和 balanceChanges；TxAnalyzer 是 EVM 工具，本案不适用，因此本案不走 TxAnalyzer。"
+            if getattr(case.network, "network_type", "evm") == "sui"
+            else "EVM case 优先使用 RPC receipt/logs、trace/source artifact、fund-flow evidence 和 worker output。"
+        )
+        return "\n\n".join(
+            [
+                "报告只使用结构化 evidence、finding、diagram specs 和 worker 输出，不使用 LLM 创造事实。",
+                chain_method,
+                "### 质量边界",
+                self._table(["#", "Boundary"], boundary_rows) if boundary_rows else "暂无全局质量边界。",
+                "### Job Run 摘要",
+                self._table(["Job", "Status", "Error", "Started"], job_rows) if job_rows else "暂无 job run。",
+            ]
+        )
+
+    def _impact_summary(self, items: list[FinancialImpactItem]) -> str:
+        if not items:
+            return "未确认"
+        grouped: dict[str, int] = {}
+        for item in items:
+            grouped[item.category] = grouped.get(item.category, 0) + 1
+        return ", ".join(f"{key}: {count}" for key, count in grouped.items())
+
+    def _component_hint(self, claim_graph: ClaimGraph) -> str:
+        root = next((claim for claim in claim_graph.claims if claim.claim_type == "root_cause"), None)
+        return str((root.metadata or {}).get("component") or claim_graph.renderer_family if root else claim_graph.renderer_family)
+
+    def _first_remediation(self, claim_graph: ClaimGraph) -> str | None:
+        claim = next((item for item in claim_graph.claims if item.claim_type == "remediation"), None)
+        return claim.text if claim else None
+
+    def _timeline_role(self, item: dict[str, Any]) -> str:
+        phase = str(item.get("phase") or "unknown")
+        mapping = {
+            "preparation": "准备攻击条件",
+            "trigger": "触发漏洞路径",
+            "exploit": "执行利用路径",
+            "extraction": "提取资产",
+            "laundering": "后续转移",
+            "post_exploit": "事后处置",
+            "remediation": "修复/补救",
+            "seed": "核心 seed 交易",
+        }
+        return mapping.get(phase, "待 reviewer 标注阶段作用")
+
+    def _alternative_hypothesis_table(self, claim_graph: ClaimGraph) -> str:
+        rows = [
+            (
+                item.name,
+                ", ".join(item.support_evidence_ids) or "-",
+                ", ".join(item.contradicting_evidence_ids) or item.rationale,
+                item.status,
+            )
+            for item in claim_graph.alternative_hypotheses
+        ]
+        return self._table(["假设", "支持证据", "反证/缺失证据", "结论"], rows) if rows else "暂无 alternative hypotheses；quality gate 会记录 warning。"
+
+    def _missing_check(self, root: ReportClaim | None) -> str:
+        if root is None:
+            return "待补充。"
+        return str((root.metadata or {}).get("missing_check") or root.reasoning or "缺失校验需由 source/trace evidence 进一步定位。")
+
+    def _controls_failed(self, root: ReportClaim | None) -> str:
+        if root is None:
+            return "待补充。"
+        return str((root.metadata or {}).get("controls_failed") or "现有控制未覆盖该 vulnerable path，或相关检查在此路径上没有执行。")
+
+    def _necessary_conditions(self, root: ReportClaim | None) -> str:
+        if root is None:
+            return "待补充。"
+        return str((root.metadata or {}).get("necessary_conditions") or "必要条件包括可达的交易路径、满足前置状态、以及缺失或失效的安全检查。")
+
+    def _claim_boundary(self, root: ReportClaim | None, claim_graph: ClaimGraph) -> str:
+        evidence = ", ".join(root.support_evidence_ids) if root else "-"
+        boundaries = "; ".join(claim_graph.global_boundaries) or "无额外全局边界。"
+        return f"Root claim evidence: {evidence}. Boundaries: {boundaries}"
+
+    def _remediation_category(self, text: str) -> str:
+        lower = text.lower()
+        if "monitor" in lower or "监控" in text:
+            return "monitoring rule"
+        if "test" in lower or "invariant" in lower or "不变量" in text:
+            return "invariant test"
+        if "patch" in lower or "enforce" in lower or "修复" in text:
+            return "code patch"
+        if "disclosure" in lower or "governance" in lower:
+            return "governance / disclosure"
+        return "immediate containment"
 
     def _is_address_scope_boundary(self, case, transactions: list, evidence: list) -> bool:
         if case.seed_type != "address":

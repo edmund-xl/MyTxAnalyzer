@@ -6,11 +6,13 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import Actor, get_actor, require_capability
+from app.models.report_quality import ClaimGraph, ReportQualityResult
 from app.models.schemas import DiagramSpecResponse, JobRunResponse, ReportCreate, ReportDetail, ReportExportCreate, ReportExportResponse, ReportResponse
 from app.services.case_service import CaseService
 from app.services.diagram_service import DiagramService
 from app.services.job_service import JobService
 from app.services.report_export_service import ReportExportService
+from app.services.report_quality_service import ReportQualityService
 from app.services.report_service import ReportService
 
 router = APIRouter()
@@ -52,6 +54,24 @@ def get_report(case_id: str, report_id: str, db: Session = Depends(get_db), acto
 def publish_report(report_id: str, db: Session = Depends(get_db), actor: Actor = Depends(get_actor)):
     require_capability(actor, "publish")
     return ReportService(db).publish(report_id, actor.user_id)
+
+
+@router.get("/reports/{report_id}/claims", response_model=ClaimGraph)
+def get_report_claims(report_id: str, db: Session = Depends(get_db), actor: Actor = Depends(get_actor)):
+    require_capability(actor, "read")
+    report = ReportService(db).get(report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return ReportQualityService(db).load_claim_graph(report)
+
+
+@router.get("/reports/{report_id}/quality", response_model=ReportQualityResult)
+def get_report_quality(report_id: str, db: Session = Depends(get_db), actor: Actor = Depends(get_actor)):
+    require_capability(actor, "read")
+    report = ReportService(db).get(report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return ReportQualityService(db).load_quality_result(report)
 
 
 @router.get("/cases/{case_id}/diagrams", response_model=list[DiagramSpecResponse])

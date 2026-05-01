@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Download, FileText, Play, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
-import { API_BASE, apiFetch, CaseDetailSummary, CaseRecord, DiagramSpec, Evidence, Finding, JobRun, Report, ReportExport, Role, TimelineItem, WorkflowRun } from "@/lib/api";
+import { API_BASE, apiFetch, CaseDetailSummary, CaseRecord, ClaimGraph, DiagramSpec, Evidence, Finding, JobRun, Report, ReportExport, ReportQualityResult, Role, TimelineItem, WorkflowRun } from "@/lib/api";
 import { JsonInspector } from "@/components/json-inspector";
 import { ReportPreview } from "@/components/report-preview";
 import { Shell, ShellCaseTab } from "@/components/shell";
@@ -91,6 +91,8 @@ export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string
       queryClient.invalidateQueries({ queryKey: ["case", caseId, role] });
       queryClient.invalidateQueries({ queryKey: ["case-summary", caseId, role] });
       queryClient.invalidateQueries({ queryKey: ["reports", caseId, role] });
+      queryClient.invalidateQueries({ queryKey: ["report-claims"] });
+      queryClient.invalidateQueries({ queryKey: ["report-quality"] });
       if (showReports) {
         refreshCurrentTab();
       }
@@ -105,23 +107,36 @@ export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string
     }
   });
   const latestReport = reports.data?.[0];
+  const latestReportId = latestReport?.id;
   const reportDetail = useQuery({
-    queryKey: ["report", caseId, latestReport?.id, role],
-    enabled: showReports && Boolean(latestReport),
-    queryFn: () => apiFetch<Report>(`/cases/${caseId}/reports/${latestReport?.id}`, {}, role)
+    queryKey: ["report", caseId, latestReportId, role],
+    enabled: showReports && Boolean(latestReportId),
+    queryFn: () => apiFetch<Report>(`/cases/${caseId}/reports/${latestReportId}`, {}, role)
   });
   const reportExports = useQuery({
-    queryKey: ["report-exports", latestReport?.id, role],
-    enabled: showReports && Boolean(latestReport),
-    queryFn: () => apiFetch<ReportExport[]>(`/reports/${latestReport?.id}/exports`, {}, role),
+    queryKey: ["report-exports", latestReportId, role],
+    enabled: showReports && Boolean(latestReportId),
+    queryFn: () => apiFetch<ReportExport[]>(`/reports/${latestReportId}/exports`, {}, role),
     refetchInterval: (query) => {
       const rows = query.state.data as ReportExport[] | undefined;
       return rows?.some((item) => item.status === "pending" || item.status === "running") ? 2000 : false;
     }
   });
+  const reportClaims = useQuery({
+    queryKey: ["report-claims", latestReportId, role],
+    enabled: showReports && Boolean(latestReportId),
+    retry: false,
+    queryFn: () => apiFetch<ClaimGraph>(`/reports/${latestReportId}/claims`, {}, role)
+  });
+  const reportQuality = useQuery({
+    queryKey: ["report-quality", latestReportId, role],
+    enabled: showReports && Boolean(latestReportId),
+    retry: false,
+    queryFn: () => apiFetch<ReportQualityResult>(`/reports/${latestReportId}/quality`, {}, role)
+  });
   const createPdf = useMutation({
-    mutationFn: () => apiFetch<ReportExport>(`/reports/${latestReport?.id}/exports`, { method: "POST", body: JSON.stringify({ format: "pdf" }) }, role),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["report-exports", latestReport?.id, role] })
+    mutationFn: () => apiFetch<ReportExport>(`/reports/${latestReportId}/exports`, { method: "POST", body: JSON.stringify({ format: "pdf" }) }, role),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["report-exports", latestReportId, role] })
   });
   const selectedEvidence = useMemo(() => evidence.data?.[0], [evidence.data]);
   const canReview = role === "admin" || role === "reviewer";
@@ -143,8 +158,8 @@ export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string
       }
       if (showReports) {
         refreshes.push(reports.refetch());
-        if (latestReport) {
-          refreshes.push(reportDetail.refetch(), reportExports.refetch());
+        if (latestReportId) {
+          refreshes.push(reportDetail.refetch(), reportExports.refetch(), reportClaims.refetch(), reportQuality.refetch());
         }
       }
       if (showJobs) {
@@ -272,6 +287,10 @@ export function CaseDetail({ caseId, initialTab = "overview" }: { caseId: string
                 detail={reportDetail.data}
                 exports={reportExports.data ?? []}
                 loading={reports.isLoading || reportDetail.isLoading}
+                claims={reportClaims.data}
+                quality={reportQuality.data}
+                qualityLoading={reportClaims.isLoading || reportQuality.isLoading}
+                qualityError={reportClaims.error?.message || reportQuality.error?.message || null}
                 exportError={downloadError || createPdf.error?.message || null}
                 onCreatePdf={() => createPdf.mutate()}
                 onDownload={downloadExport}
@@ -562,7 +581,11 @@ function ReportsPanel({
   reports,
   detail,
   exports,
+  claims,
+  quality,
   loading,
+  qualityLoading,
+  qualityError,
   exportError,
   onCreatePdf,
   onDownload,
@@ -574,7 +597,11 @@ function ReportsPanel({
   reports: Report[];
   detail?: Report;
   exports: ReportExport[];
+  claims?: ClaimGraph;
+  quality?: ReportQualityResult;
   loading: boolean;
+  qualityLoading: boolean;
+  qualityError: string | null;
   exportError: string | null;
   onCreatePdf: () => void;
   onDownload: (exportId: string) => void;
@@ -601,6 +628,7 @@ function ReportsPanel({
         </div>
         {exportError ? <div className="badge high">{exportError}</div> : null}
         {pdf?.error ? <div className="badge high">{pdf.error}</div> : null}
+        <ReportQualitySummary report={detail ?? reports[0]} claims={claims} quality={quality} loading={qualityLoading} error={qualityError} />
         <div className="table-wrap">
           <table>
             <thead>
@@ -626,8 +654,140 @@ function ReportsPanel({
           </table>
         </div>
         <Pager offset={offset} total={total} pageSize={REPORT_PAGE_SIZE} onPage={onPage} />
+        <ClaimsPreview claims={claims} />
       </div>
       {typeof detail?.content === "string" ? <ReportPreview content={detail.content} /> : <div className="markdown">{JSON.stringify(detail?.content ?? {}, null, 2)}</div>}
+    </div>
+  );
+}
+
+function ReportQualitySummary({
+  report,
+  claims,
+  quality,
+  loading,
+  error
+}: {
+  report?: Report;
+  claims?: ClaimGraph;
+  quality?: ReportQualityResult;
+  loading: boolean;
+  error: string | null;
+}) {
+  const metadata = report?.metadata ?? {};
+  const rendererFamily = claims?.renderer_family || metadataText(metadata, "renderer_family") || "-";
+  const claimCount = claims?.claims.length ?? numberMetadata(metadata, "claim_count");
+  const score = quality?.score ?? numberMetadata(metadata, "quality_score");
+  const blockingCount = quality?.blocking_issues.length ?? numberMetadata(metadata, "blocking_issue_count");
+  const warningCount = quality?.warnings.length ?? numberMetadata(metadata, "warning_count");
+
+  return (
+    <div className="form-grid">
+      <div className="grid-3">
+        <div className="metric">
+          <div className="metric-label">Quality Score</div>
+          <div className="metric-value">{loading && score === undefined ? "..." : score ?? "-"}</div>
+        </div>
+        <div className="metric">
+          <div className="metric-label">Blocking</div>
+          <div className="metric-value">{blockingCount ?? "-"}</div>
+        </div>
+        <div className="metric">
+          <div className="metric-label">Warnings</div>
+          <div className="metric-value">{warningCount ?? "-"}</div>
+        </div>
+        <div className="metric">
+          <div className="metric-label">Renderer</div>
+          <div>{rendererFamily}</div>
+        </div>
+        <div className="metric">
+          <div className="metric-label">Claims</div>
+          <div className="metric-value">{claimCount ?? "-"}</div>
+        </div>
+        <div className="metric">
+          <div className="metric-label">Report Type</div>
+          <div>{metadataText(metadata, "report_type") || metadataText(claims?.metadata ?? {}, "report_type") || "-"}</div>
+        </div>
+      </div>
+      {error ? <div className="badge high">Quality artifact unavailable: {shortError(error)}</div> : null}
+      {quality?.blocking_issues.length ? (
+        <IssueList title="Blocking Issues" issues={quality.blocking_issues} />
+      ) : quality ? (
+        <div className="badge success">No blocking quality issue</div>
+      ) : null}
+      {quality?.warnings.length ? <IssueList title="Warnings" issues={quality.warnings.slice(0, 6)} /> : null}
+    </div>
+  );
+}
+
+function IssueList({ title, issues }: { title: string; issues: ReportQualityResult["blocking_issues"] }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{title}</th>
+            <th>Rule</th>
+            <th>Claim</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          {issues.map((item) => (
+            <tr key={item.issue_id}>
+              <td>{item.message}</td>
+              <td>{item.rule_id}</td>
+              <td>{item.claim_id || "-"}</td>
+              <td>{item.evidence_ids.length}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ClaimsPreview({ claims }: { claims?: ClaimGraph }) {
+  if (!claims) {
+    return (
+      <div className="metric">
+        <div className="metric-label">Claims Preview</div>
+        <div>Generate a new report to view claim graph and QA artifacts.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Claim</th>
+            <th>Type</th>
+            <th>Confidence</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          {claims.claims.slice(0, 8).map((claim) => (
+            <tr key={claim.claim_id}>
+              <td>
+                <strong>{claim.claim_id}</strong>
+                <div>{claim.text}</div>
+              </td>
+              <td>{claim.claim_type}</td>
+              <td>
+                <StatusBadge value={claim.confidence} />
+              </td>
+              <td>{claim.support_evidence_ids.length}</td>
+            </tr>
+          ))}
+          {!claims.claims.length ? (
+            <tr>
+              <td colSpan={4}>No claims</td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -737,4 +897,28 @@ function LoadingMetric({ label }: { label: string }) {
       <div>Loading...</div>
     </div>
   );
+}
+
+function metadataText(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return String(value);
+}
+
+function numberMetadata(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function shortError(value: string) {
+  return value.length > 160 ? `${value.slice(0, 160)}...` : value;
 }

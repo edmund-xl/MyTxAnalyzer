@@ -71,6 +71,17 @@ High/Critical finding 必须绑定 deterministic evidence。当前 deterministic
 
 这类报告不应出现“铸造虚假抵押品”“借出真实资产”“跨链转出”等攻击段落，除非已有 deterministic transfer / receipt / trace evidence。
 
+### 4.2 报告质量面板
+
+生成报告后，`Reports` tab 会同时显示：
+
+- `Quality Score`：从 100 开始，blocking issue 每项扣 30，warning 每项扣 5。
+- `Blocking` / `Warnings`：发布前必须处理 blocking issue；warning 可作为补证或改写优先级。
+- `Renderer` / `Report Type`：确认报告是否使用了正确的 attack family 或预分析降级结构。
+- `Claims Preview`：只读展示报告的核心 claim、claim type、confidence 和 evidence 数量。
+
+如果质量面板显示旧报告缺少 quality artifact，应重新点击 `Draft Report` 生成新版。`Publish` 会执行 QA Gate；High/Critical finding 缺 deterministic evidence、完整 RCA 缺交易范围、root cause claim 无 evidence、普通 native transfer 被写成攻击等问题会被阻断。
+
 ### 5. Approve / Reject Finding
 
 在 case 详情页打开 `Findings`：
@@ -180,6 +191,17 @@ When the entry type is `Address` and the system has no txlist, receipt, or trace
 - The deterministic condition required for formal RCA: a seed transaction or Explorer txlist.
 
 These reports should not include attack-stage sections such as “fake collateral mint”, “real asset borrow”, or “bridge outflow” unless deterministic transfer / receipt / trace evidence exists.
+
+### 4.2 Report Quality Panel
+
+After generating a report, the `Reports` tab shows:
+
+- `Quality Score`: starts at 100; each blocking issue subtracts 30 and each warning subtracts 5.
+- `Blocking` / `Warnings`: blocking issues must be resolved before publish; warnings guide evidence collection or wording improvements.
+- `Renderer` / `Report Type`: confirms whether the report used the correct attack family or a pre-analysis downgrade structure.
+- `Claims Preview`: read-only view of core claims, claim type, confidence, and evidence count.
+
+If the quality panel says an older report has no quality artifact, click `Draft Report` again to generate a new version. `Publish` runs the QA Gate; missing deterministic evidence for High/Critical findings, full RCA without transaction scope, root-cause claims without evidence, or plain native transfers written as attacks are blocked.
 
 ### 5. Approve / Reject Findings
 

@@ -101,6 +101,7 @@ export type Finding = {
 
 export type Report = {
   id: string;
+  case_id: string;
   version: number;
   language: string;
   format: string;
@@ -108,7 +109,85 @@ export type Report = {
   object_path: string | null;
   content_hash: string | null;
   evidence_coverage: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   content?: string | Record<string, unknown> | null;
+};
+
+export type EvidenceRef = {
+  evidence_id: string;
+  source_type: string | null;
+  producer: string | null;
+  claim_key: string | null;
+  raw_path: string | null;
+};
+
+export type ReportClaim = {
+  claim_id: string;
+  section: string;
+  claim_type: string;
+  text: string;
+  confidence: string;
+  support_evidence_ids: string[];
+  contradicting_evidence_ids: string[];
+  evidence_refs: EvidenceRef[];
+  reasoning: string;
+  falsification: string | null;
+  metadata: Record<string, unknown>;
+};
+
+export type AlternativeHypothesis = {
+  hypothesis_id: string;
+  name: string;
+  status: string;
+  support_evidence_ids: string[];
+  contradicting_evidence_ids: string[];
+  rationale: string;
+  confidence: string;
+};
+
+export type FinancialImpactItem = {
+  item_id: string;
+  category: string;
+  asset: string;
+  amount_raw: string | null;
+  amount_display: string | null;
+  usd_value: string | null;
+  price_source: string | null;
+  support_evidence_ids: string[];
+  confidence: string;
+  notes: string | null;
+};
+
+export type ClaimGraph = {
+  case_id: string;
+  report_version: number;
+  renderer_family: string;
+  claims: ReportClaim[];
+  alternative_hypotheses: AlternativeHypothesis[];
+  financial_impact: FinancialImpactItem[];
+  global_boundaries: string[];
+  metadata: Record<string, unknown>;
+};
+
+export type ReportQualityIssue = {
+  issue_id: string;
+  severity: string;
+  rule_id: string;
+  message: string;
+  section: string | null;
+  claim_id: string | null;
+  evidence_ids: string[];
+  recommendation: string | null;
+};
+
+export type ReportQualityResult = {
+  case_id: string;
+  report_version: number;
+  score: number;
+  blocking_issues: ReportQualityIssue[];
+  warnings: ReportQualityIssue[];
+  infos: ReportQualityIssue[];
+  metadata: Record<string, unknown>;
 };
 
 export type ReportExport = {
