@@ -55,7 +55,7 @@
 - 前端代码改动：运行 `cd frontend && pnpm exec tsc --noEmit`。
 - 前端构建相关改动：先停止 3100 dev server，再运行 `cd frontend && pnpm build`，构建后清理 `.next` 并恢复 3100。
 - API/服务改动：至少检查 `curl -sS http://127.0.0.1:8100/api/health`。
-- 端口相关改动：检查 `3000/4000/3100/8100`，避免 RCA 占用 MegaETH Pentest Workbench 端口。
+- 端口相关改动：优先运行 `./scripts/ensure_rca_services.sh`，再检查 `3000/4000/3100/8100`，避免 RCA 占用 MegaETH Pentest Workbench 端口，并避免其他本地项目占用 RCA 的 `3100/8100`。
 - 报告/PDF/图例改动：至少用一个已有 case 验证 Markdown report、diagram specs、PDF export status 和 PDF download。
 - 报告语言改动：至少扫描一份新生成 Markdown，确认没有英文模板标题、英文质量字段或英文占位文案；必要技术标识除外。
 - 报告质量改动：必须验证 `.claims.json`、`.quality.json`、`GET /api/reports/{report_id}/claims`、`GET /api/reports/{report_id}/quality`，以及 blocking issue 对 publish 的阻断行为。
@@ -74,6 +74,8 @@ MegaETH Pentest Workbench 默认保留：
 - API: `4000`
 
 除非用户明确要求，不得让 RCA 服务占用 `3000/4000`。
+
+如果 `3100` 或 `8100` 状态异常，先运行 `./scripts/ensure_rca_services.sh`。该脚本只管理 RCA 自己的 `3100/8100`，不会触碰 `3000/4000`。本机需要长期自恢复时，运行 `./scripts/install_rca_launch_agent.sh` 安装 launchd 守护；守护脚本从 `~/Library/Scripts/rca-workbench/` 执行，日志写入 `~/Library/Logs/rca-workbench/`。
 
 ## English
 
@@ -130,7 +132,7 @@ Choose verification based on the change scope:
 - Frontend changes: run `cd frontend && pnpm exec tsc --noEmit`.
 - Frontend build changes: stop the 3100 dev server first, run `cd frontend && pnpm build`, then remove `.next` and restore the 3100 dev server.
 - API/service changes: at minimum check `curl -sS http://127.0.0.1:8100/api/health`.
-- Port-related changes: check `3000/4000/3100/8100` and avoid letting RCA take the MegaETH Pentest Workbench ports.
+- Port-related changes: run `./scripts/ensure_rca_services.sh` first, then check `3000/4000/3100/8100`; avoid letting RCA take the MegaETH Pentest Workbench ports and avoid letting other local projects take RCA's `3100/8100`.
 - Report/PDF/diagram changes: verify Markdown report, diagram specs, PDF export status, and PDF download with at least one existing case.
 - Report-language changes: scan at least one newly generated Markdown report and confirm there are no English template headings, quality labels, or placeholder phrases, except necessary technical identifiers.
 - Report quality changes: verify `.claims.json`, `.quality.json`, `GET /api/reports/{report_id}/claims`, `GET /api/reports/{report_id}/quality`, and publish blocking behavior for blocking issues.
@@ -149,3 +151,5 @@ MegaETH Pentest Workbench should keep:
 - API: `4000`
 
 Do not let RCA services occupy `3000/4000` unless the user explicitly requests it.
+
+If `3100` or `8100` is unhealthy, run `./scripts/ensure_rca_services.sh` first. The script only manages RCA's own `3100/8100` and does not touch `3000/4000`. For long-running local self-healing, run `./scripts/install_rca_launch_agent.sh` to install the launchd guard; the guard script runs from `~/Library/Scripts/rca-workbench/`, and logs are written to `~/Library/Logs/rca-workbench/`.

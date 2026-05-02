@@ -17,6 +17,8 @@ RCA Workbench 与 MegaETH Pentest Workbench 已明确隔离：
 | MegaETH Pentest frontend | `http://127.0.0.1:3000` | 不属于本项目 |
 | MegaETH Pentest API | `http://127.0.0.1:4000` | 不属于本项目 |
 
+端口恢复脚本：`./scripts/ensure_rca_services.sh`。该脚本会检查 `3100/8100`，确认它们分别由 RCA frontend/backend 占用；如果 `3100` 被其他本地项目占用，会释放该错误占用并用正确的 `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8100/api` 重启 RCA frontend。脚本不会触碰 `3000/4000`。本机可运行 `./scripts/install_rca_launch_agent.sh` 安装 launchd 守护，让 macOS 每 60 秒自动执行恢复检查；守护脚本实际复制到 `~/Library/Scripts/rca-workbench/` 执行，日志写入 `~/Library/Logs/rca-workbench/`。
+
 ### 后端已实现范围
 
 - FastAPI API 已覆盖 networks、cases、transactions、timeline、evidence、findings review、reports、diagrams、report exports、jobs、health。
@@ -203,6 +205,8 @@ The RCA Workbench is separated from the MegaETH Pentest Workbench:
 | RCA backend | `http://127.0.0.1:8100/api` | FastAPI API |
 | MegaETH Pentest frontend | `http://127.0.0.1:3000` | Not owned by this project |
 | MegaETH Pentest API | `http://127.0.0.1:4000` | Not owned by this project |
+
+Port recovery script: `./scripts/ensure_rca_services.sh`. The script checks `3100/8100` and confirms that they are owned by the RCA frontend/backend. If another local project owns `3100`, it releases that wrong listener and restarts the RCA frontend with `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8100/api`. It does not touch `3000/4000`. Run `./scripts/install_rca_launch_agent.sh` on this machine to install a launchd guard that runs the recovery check every 60 seconds; the executable copy runs from `~/Library/Scripts/rca-workbench/`, and logs are written to `~/Library/Logs/rca-workbench/`.
 
 ### Implemented Backend Scope
 

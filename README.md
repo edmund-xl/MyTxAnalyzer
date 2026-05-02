@@ -45,6 +45,22 @@ RCA Workbench 端口明确避开 MegaETH Pentest Workbench：
 - RCA backend API: `http://127.0.0.1:8100/api`
 - MegaETH Pentest Workbench 保持使用 `3000/4000`。
 
+如果 `3100` 被其他本地项目占用，或 RCA 页面无法访问，使用守护脚本恢复服务：
+
+```bash
+./scripts/ensure_rca_services.sh
+```
+
+该脚本会确认 `8100` 是 RCA backend、`3100` 是 RCA frontend；如果 `3100` 被非 RCA 进程占用，会停止该错误占用并重新启动 RCA frontend。脚本不会处理 `3000/4000`。
+
+如需让本机持续自动恢复 RCA 服务，安装 launchd 守护：
+
+```bash
+./scripts/install_rca_launch_agent.sh
+```
+
+安装后 macOS 会每 60 秒运行一次恢复脚本，并在登录后自动检查 RCA 服务。实际执行脚本会复制到 `~/Library/Scripts/rca-workbench/ensure_rca_services.sh`，日志写入 `~/Library/Logs/rca-workbench/`，避免 macOS 对 `Documents` 下脚本的 launchd 执行限制。
+
 后端回归：
 
 ```bash
@@ -133,6 +149,22 @@ The RCA Workbench ports are intentionally kept away from the MegaETH Pentest Wor
 - RCA frontend: `http://127.0.0.1:3100`
 - RCA backend API: `http://127.0.0.1:8100/api`
 - MegaETH Pentest Workbench remains on `3000/4000`.
+
+If another local project occupies `3100`, or the RCA page is unreachable, restore the services with the guard script:
+
+```bash
+./scripts/ensure_rca_services.sh
+```
+
+The script confirms that `8100` belongs to the RCA backend and `3100` belongs to the RCA frontend. If a non-RCA process owns `3100`, it stops that wrong listener and restarts the RCA frontend. It does not touch `3000/4000`.
+
+To keep RCA services self-healing on this machine, install the launchd guard:
+
+```bash
+./scripts/install_rca_launch_agent.sh
+```
+
+After installation, macOS runs the recovery script every 60 seconds and checks RCA services automatically after login. The executable copy is installed at `~/Library/Scripts/rca-workbench/ensure_rca_services.sh`, and logs are written to `~/Library/Logs/rca-workbench/` to avoid macOS launchd execution restrictions for scripts under `Documents`.
 
 Backend regression:
 
