@@ -43,6 +43,18 @@ git status --short
 git check-ignore .env .local_rca.db backend/test_rca_workbench.db frontend/node_modules frontend/tsconfig.tsbuildinfo vendor/txanalyzer tmp
 ```
 
+### 分支命名与推送
+
+本仓库在 Codex 中创建新分支时，统一使用 `Edmund/` 前缀。不得再使用旧默认前缀作为本地或 GitHub 远端分支前缀。
+
+```bash
+git switch -c Edmund/<short-task-name>
+git branch --show-current
+git branch -r
+```
+
+推送前必须确认当前分支以 `Edmund/` 开头，且远端不会新增非 `Edmund/` 工作分支。除非用户明确要求，否则不要从 `main` 直接做功能提交。
+
 ### 发布原则
 
 - 不上传真实 RPC key、Explorer key、LLM key、数据库密码或对象存储密钥。
@@ -93,6 +105,18 @@ cd /Users/lei/Documents/New\ project/onchain-rca-workbench
 git status --short
 git check-ignore .env .local_rca.db backend/test_rca_workbench.db frontend/node_modules frontend/tsconfig.tsbuildinfo vendor/txanalyzer tmp
 ```
+
+### Branch Naming And Push
+
+When creating a new branch for this repository from Codex, always use the `Edmund/` prefix. Do not use the old default prefix as the local or GitHub remote branch prefix.
+
+```bash
+git switch -c Edmund/<short-task-name>
+git branch --show-current
+git branch -r
+```
+
+Before pushing, confirm that the current branch starts with `Edmund/` and that the remote will not receive a non-`Edmund/` work branch. Unless the user explicitly requests it, do not make feature commits directly on `main`.
 
 ### Publishing Rules
 

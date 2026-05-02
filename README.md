@@ -85,6 +85,10 @@ DATABASE_URL="sqlite+pysqlite:///./perf_rca_workbench.db" \
 每次功能、性能、报告质量、运维方式或接口行为发生更新，都必须同步更新对应文档。
 我们自己维护的交付文档必须采用双语格式：中文在前，英文在后。原始规格包和第三方 vendor 文档保持来源原貌。
 
+### 分支命名
+
+在 Codex 中为本仓库创建新分支时，默认使用 `Edmund/` 前缀，例如 `Edmund/report-quality-gate`。不要再使用旧默认前缀作为本地或 GitHub 远端分支前缀；发布细则见 `docs/repository_publish.md`。
+
 ## English
 
 Internal post-incident on-chain attack analysis and report-generation workbench.
@@ -169,3 +173,7 @@ DATABASE_URL="sqlite+pysqlite:///./perf_rca_workbench.db" \
 
 Every update to features, performance, report quality, operations, or API behavior must include corresponding documentation updates.
 Project-owned delivery documents must be bilingual: Chinese first, English second. Imported source specifications and third-party vendor documents remain unchanged.
+
+### Branch Naming
+
+When creating a new branch for this repository from Codex, use the `Edmund/` prefix by default, for example `Edmund/report-quality-gate`. Do not use the old default prefix as the local or GitHub remote branch prefix; see `docs/repository_publish.md` for publishing details.

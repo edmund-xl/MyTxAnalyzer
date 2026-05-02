@@ -39,6 +39,14 @@
 - 是否影响报告结构、PDF 导出、图例生成或 case 回归队列。
 - 有哪些已知限制或后续任务。
 
+### 分支命名
+
+- 在 Codex 中为本仓库创建任何新分支时，默认前缀必须使用 `Edmund/`。
+- 不再使用旧默认前缀作为本仓库的本地或 GitHub 远端分支前缀。
+- 示例：`Edmund/report-quality-gate`、`Edmund/provider-stability`。
+- 如果用户明确指定其他分支名，以用户最新指令为准；否则使用 `Edmund/<short-task-name>`。
+- 推送前必须检查 `git branch --show-current` 和 `git branch -r`，确认没有误创建或推送非 `Edmund/` 工作分支。
+
 ### 验证标准
 
 按改动范围选择验证：
@@ -105,6 +113,14 @@ Every code delivery should state:
 - Whether ports, environment variables, database migrations, object storage, or external dependencies were affected.
 - Whether report structure, PDF export, diagram generation, or the case regression queue was affected.
 - Known limitations or follow-up work.
+
+### Branch Naming
+
+- Any new branch created for this repository from Codex must use the `Edmund/` prefix by default.
+- Do not use the old default prefix as the local or GitHub remote branch prefix for this repository.
+- Examples: `Edmund/report-quality-gate`, `Edmund/provider-stability`.
+- If the user explicitly requests another branch name, follow the latest user instruction; otherwise use `Edmund/<short-task-name>`.
+- Before pushing, check `git branch --show-current` and `git branch -r` to confirm that no non-`Edmund/` work branch was created or pushed by mistake.
 
 ### Verification Standard
 
